@@ -1,0 +1,26 @@
+Number of energies		  PsiFlag		    Coupling Matrix
+      80                          0                            0
+
+Legendre File
+Legendre.dat
+
+Legendre Points
+     10
+
+ Shift    Shift2	Order    Left	Right 
+-2000.0d0      -0.01d0        5         0    0
+
+   alpha          mi          	      ma	         DD         L
+  1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
+
+xPoints    f-omega 	     Nbs	      C4     	      		 phase2B
+400 	   3d5		     3                1.121d-56 	 	 0.10687727
+
+ RSteps   RDerivDelt     RFirst    	      RLast
+  400       0.0001d0      0.43339d0    	      100.0d0
+
+
+c Pi/2=1.5707963267948966
+c Pi/6=0.52359877559829882
+
+0.853138729379683d0
