@@ -1,0 +1,2 @@
+Left = 0 and Right = 0 for simple square well
+Left = 3 for what we want

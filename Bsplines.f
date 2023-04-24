@@ -1,6 +1,10 @@
       subroutine CalcBasisFuncs(Left,Right,Order,xPoints,LegPoints,
      >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
 
+!u is basis
+!ux is derivative
+!uxx = ddx^2
+
       integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
      >     xNumPoints,Deriv
       double precision xPoints(*),xLeg(*)
@@ -13,6 +17,8 @@
 
       allocate(t(xNumPoints+2*Order))
 
+       open(unit = 1, file = "BsplinesOutputTest.txt")
+
       do i = 1,Order
        t(i) = 1
       enddo
@@ -23,9 +29,16 @@
        t(i+Order+xNumPoints) = xNumPoints
       enddo
 
-      select case (Left)
+! 0 - Wavefunction
+! 1 - First Derivative
+! 2 - No BC
+! 3 - Log Derivative
+
+
+      select case (Left) !Left and Right, notes as 0 and 1, invoke the same do statement
       case (0:1)
-         select case (Right)
+      
+      select case (Right)
       case (0:1)
          do i = 2,xNumPoints+2*Order-1
             xBounds(i-1) = t(i)
@@ -50,7 +63,7 @@
       
       deallocate(t)
 
-      Count = 1
+      Count = 1 !keeps track of which basis function is working
       select case (Left)
        case (0)
         do k = 1,xNumPoints-1
@@ -60,7 +73,7 @@
          xScaledZero = 0.5d0*(bx+ax)
          do l = 1,LegPoints
           x = xIntScale*xLeg(l)+xScaledZero
-          u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+          u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x) !evaluates bspline at point x and stores in array u (containes bsplines evaluated at necessary pts) (ct 1 is evaluated from primitive 2)
          enddo
         enddo
         Count = Count + 1
@@ -72,13 +85,13 @@
          xScaledZero = 0.5d0*(bx+ax)
          do l = 1,LegPoints
           x = xIntScale*xLeg(l)+xScaledZero
-          u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+ MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+          u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+ MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x) !exactly first plus second to ensure boundary condition (0 derivative)
           
           
          enddo
         enddo
         Count = Count + 1
-       case(2)
+       case(2) !using primitibe set
         do i = 1,2
          do k = 1,xNumPoints-1
           ax = xPoints(k)
@@ -435,7 +448,7 @@ c     ous call). Then, if  xt(ilo) .le. x .lt. xt(ilo+1), we set  left =
 c     ilo  and are done after just three comparisons.
 c     Otherwise, we repeatedly double the difference  istep = ihi - ilo
 c     while also moving  ilo  and  ihi  in the direction of  x , until
-c     xt(ilo) .le. x .lt. xt(ihi) ,
+c     xt(ilo) .le. x .lt. xt(ihi),
 c     after which we use bisection to get, in addition, ilo+1 = ihi .
 c     left = ilo  is then returned.
 c     
@@ -542,4 +555,237 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       close(unit=7)
 
       return
+      close(1)
       end
+
+      subroutine CalcBasisFuncsBP(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,
+     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
+
+      integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
+     >     xNumPoints,Deriv
+      double precision xPoints(*),xLeg(*)
+      double precision u(LegPoints,xNumPoints,MatrixDim)
+
+      integer i,k,l,Count
+      integer, allocatable :: t(:)
+      double precision MyBSpline
+      double precision x,ax,bx,xIntScale,xScaledZero
+      double precision kLeft,kRight,constLeft,constRight,lc1n,lc2n,rc1n,rc2n
+
+      allocate(t(xNumPoints+2*Order))
+
+      do i = 1,Order
+       t(i) = 1
+      enddo
+      do i = 1,xNumPoints
+       t(i+Order) = i
+      enddo
+      do i = 1,Order
+       t(i+Order+xNumPoints) = xNumPoints
+      enddo
+
+      select case (Left)
+      case (0:1)
+         select case (Right)
+         case (0:1)
+            do i = 2,xNumPoints+2*Order-1
+               xBounds(i-1) = t(i)
+            enddo
+         case (2)
+            do i = 2,xNumPoints+2*Order
+               xBounds(i-1) = t(i)
+            enddo
+         case(3)
+            do i = 2,xNumPoints+2*Order-1
+               xBounds(i-1) = t(i)
+            enddo
+         end select
+      case (2)
+         select case (Right)
+         case (0:1)
+            do i = 1,xNumPoints+2*Order-1
+               xBounds(i) = t(i)
+            enddo
+         case (2)
+            do i = 1,xNumPoints+2*Order
+               xBounds(i) = t(i)
+            enddo
+         case (3)
+            do i = 1,xNumPoints+2*Order-1
+               xBounds(i) = t(i)
+            enddo
+         end select
+      case (3)
+         select case (Right)
+         case (0:1)
+            do i = 2,xNumPoints+2*Order-1
+               xBounds(i-1) = t(i)
+            enddo
+         case (2)
+            do i = 2,xNumPoints+2*Order
+               xBounds(i-1) = t(i)
+            enddo
+         case(3)
+            do i = 2,xNumPoints+2*Order-1
+               xBounds(i-1) = t(i)
+            enddo
+         end select
+      end select
+      
+      deallocate(t)
+
+      Count = 1
+      select case (Left)
+      case (0)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+            enddo
+         enddo
+         Count = Count + 1
+      case (1)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
+     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+            enddo
+         enddo
+         Count = Count + 1
+      case(2)
+         do i = 1,2
+            do k = 1,xNumPoints-1
+               ax = xPoints(k)
+               bx = xPoints(k+1)
+               xScale = 0.5d0*(bx-ax)
+               xScaledZero = 0.5d0*(bx+ax)
+               do l = 1,LegPoints
+                  x = xScale*xLeg(l)+xScaledZero
+                  u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,i,x)
+               enddo
+            enddo
+            Count = Count + 1
+         enddo
+      case(3)
+         constLeft = -MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1)) / (
+     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)) - 
+     >        MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft)
+c$$$         constLeft = -(kLeft*MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)) -
+c$$$     >        MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))) / (
+c$$$     >        MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - 
+c$$$     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
+         !lc1n = 1.d0/(1.d0 + constLeft)
+         !lc2n = constLeft/(1.d0 + constLeft)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+c               u(l,k,Count) = constLeft*MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
+c     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
+     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)/constLeft
+            enddo
+         enddo
+         Count = Count + 1
+      end select
+
+      do i = 3,xNumPoints+Order-3
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xIntScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xIntScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,i,x)
+            enddo
+         enddo
+         Count = Count + 1
+      enddo
+
+      select case (Right)
+      case (0)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,
+     >              xNumPoints+Order-2,x)
+            enddo
+         enddo
+      case (1)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,
+     >              xNumPoints+Order-2,x)+
+     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,
+     >              xNumPoints+Order-1,x)
+            enddo
+         enddo
+      case(2)
+         do i = xNumPoints+Order-2,xNumPoints+Order-1
+            do k = 1,xNumPoints-1
+               ax = xPoints(k)
+               bx = xPoints(k+1)
+               xScale = 0.5d0*(bx-ax)
+               xScaledZero = 0.5d0*(bx+ax)
+               do l = 1,LegPoints
+                  x = xScale*xLeg(l)+xScaledZero
+                  u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,i,x)
+               enddo
+            enddo
+            Count = Count + 1
+         enddo
+      case(3)
+c         print*,"xPoints(xNumPoints) = ",xPoints(xNumPoints)
+c         print*,"B_N'/B_N = ",MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))/
+c     >                        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))
+c         constRight = -(kRight*MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) -
+c     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))) / ( !c2/c1
+c     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
+c     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
+         constRight = -MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) / ( 
+     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)) - 
+     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight)
+
+c        print*,'constRight = ',constRight
+c        STOP
+         !rc1n = 1.d0/(1.d0 + constRight)
+         !rc2n = constRight/(1.d0 + constRight)
+         do k = 1,xNumPoints-1
+            ax = xPoints(k)
+            bx = xPoints(k+1)
+            xScale = 0.5d0*(bx-ax)
+            xScaledZero = 0.5d0*(bx+ax)
+            do l = 1,LegPoints
+               x = xScale*xLeg(l)+xScaledZero
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)/constRight+
+     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
+            enddo
+         enddo
+      end select
+
+      return
+      end
+      
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

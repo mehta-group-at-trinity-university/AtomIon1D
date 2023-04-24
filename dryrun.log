@@ -1,0 +1,9 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Users/angelagraf/Desktop/Collisions/AtomIon1D'
+gfortran -fcheck=all  -ffixed-line-length-132 -O3 -c besselnew.f
+gfortran  -ffixed-line-length-132 -O3 -c Bsplines.f
+gfortran  -c Quadrature.f90
+gfortran -fcheck=all  -ffixed-line-length-132 -O3 -c AtomIon1D.f
+gfortran -fcheck=all besselnew.o Bsplines.o Quadrature.o AtomIon1D.o -I/opt/homebrew/include/ -I/usr/local/include -L /opt/homebrew/lib/ -larpack -framework accelerate  -ffixed-line-length-132 -O3  -o AtomIon1D.x
+make: Leaving directory `/Users/angelagraf/Desktop/Collisions/AtomIon1D'
+ 

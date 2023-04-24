@@ -1,5 +1,6 @@
 c     234567890
       program HHL1DHyperspherical
+
       implicit none
       integer LegPoints,xNumPoints
       integer NumStates,PsiFlag,Order,Left,Right
@@ -73,7 +74,7 @@ c     read in potential parameters
       Pi=dacos(-1.d0)
       write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
       mgamma = mu
-      phiai = datan(mgamma)     !same as Seth's beta
+      phiai = datan(mgamma)     !same as Seths beta
       write(6,*) "phiai = ", phiai
 
 c     read in grid information
@@ -982,7 +983,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       
       double precision rij,DD,L
       VSech = -DD/dcosh(rij/L)**2.d0
-      end 
+      end
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       double precision function phirecon(R,beta,evec,left,right,RDim,MatrixDim,RNumPoints,RPoints,order)

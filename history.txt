@@ -1,0 +1,1022 @@
+    1  mkdir Notes
+    2  mv * Notes
+    3  rm *
+    4  rmdir Notes
+    5  rm -r Notes
+    6  ls -rlth
+    7  :a
+    8  ls -rlth
+    9  cd Downloads
+   10  ls -rlth
+   11  vi Thermodynamics_and_an_Introduction_to_Th.djvu
+   12  rm *
+   13  ls
+   14  open Herbert_B_Callen_Thermodynamics_and_an_I.pdf
+   15  open Herbert_B_Callen_Thermodynamics_and_an_I.pdf
+   16  cp /Users/angelagraf/Desktop/Screen\ Shot\ 2023-01-16\ at\ 8.10.33\ PM.png /Users/angelagraf/Desktop/Screen\ Shot\ 2023-01-16\ at\ 8.10.33\ PM2.png 
+   17  cp /Users/angelagraf/Downloads/02_hw_csci1323_myname.tex hw_02.txt
+   18  open hw_02.txt
+   19  cd Downloads
+   20  LS -RLTH
+   21  cd /Users/angelagraf/Desktop/Data_Abstraction 
+   22  touch Chapter_2_Reading_Notes.txt
+   23  open Chapter_2_Reading_Notes.txt
+   24  cd /Users/angelagraf/Desktop/Data_Abstraction 
+   25  ls -rlth
+   26  mkdir Reading_Notes
+   27  mv Chapter_2_Reading_Notes.txt Reading_Notes
+   28  ls -tlh
+   29  mkdir Playground
+   30  cd Playground
+   31  ls -rlht
+   32  vi Square_Sample.cpp
+   33  g++ Square_Sample.cpp
+   34  vi Square_Sample.cpp
+   35  g++ Square_Sample.cpp
+   36  ./a.out
+   37  g++ Square_Sample.cpp
+   38  ./a.out
+   39  g++ Square_Sample.cpp
+   40  vi Square_Sample.cpp
+   41  g++ Square_Sample.cpp
+   42  ./a.out
+   43  sizeof(int)
+   44  cd /Users/angelagraf/Desktop/Honors_Thesis 
+   45  mkdir Meeting_Notes
+   46  mv /Users/angelagraf/Desktop/Honors_Thesis/Meeting_Jan_11 Meeting_Notes
+   47  cd /Users/angelagraf/Desktop/Honors_Thesis 
+   48  cd/Users/angelagraf/Desktop/Data_Abstraction 
+   49  cd /Users/angelagraf/Desktop/Data_Abstraction 
+   50  ls -rlth
+   51  cd Class_Code
+   52  ls -rlth
+   53  mkdir Hello_World
+   54  mv * Hello_World
+   55  mkdir Project_Euler
+   56  cd Project_Euler
+   57  vi project_euler.cpp
+   58  ls -rlt
+   59  g++ -std=c++11 project_euler.cpp -o eul
+   60  vi project_euler.cpp
+   61  g++ -std=c++11 project_euler.cpp -o eul
+   62  vi project_euler.cpp
+   63  g++ -std=c++11 project_euler.cpp -o eul
+   64  vi project_euler.cpp
+   65  g++ -std=c++11 project_euler.cpp -o eul
+   66  vi project_euler.cpp
+   67  g++ -std=c++11 project_euler.cpp -o eul
+   68  ./eul
+   69  clear
+   70  ls -rlth
+   71  ssh agraf@xena04.cs.trinity.edu
+   72  cd /Users/angelagraf/Desktop/Stat_Mech 
+   73  mkdir backup_misc
+   74  cd backup_misc
+   75  ls -rlth
+   76  vi old.txt
+   77  vi old.txt
+   78  cd /Users/angelagraf/Desktop/Data_Abstraction 
+   79  ls -rlht
+   80  cd Class_Code
+   81  ls -rlth
+   82  cd Project_Euler
+   83  ls -rlth
+   84  ssh agraf@xena04.cs.trinity.edu
+   85  ssh agraf@xena04.cs.trinity.edu
+   86  ls -rlth
+   87  mv project_euler.cpp euler.cpp
+   88  ls -rthl
+   89  cd Desktop
+   90  mkdir French_II
+   91  cd French_II
+   92  ls -rlth
+   93  touch Fri_Jan_20.txt
+   94  vi Fri_Jan_20.txt
+   95  open Fri_Jan_20.txt
+   96  cd Downloads
+   97  ls -rlht
+   98  mv Stat_Mech_HW_01.pdf /Users/angelagraf/Desktop/Stat_Mech 
+   99  ls -rlht
+  100  rm *02
+  101  ls
+  102  rm *
+  103  ls-rlt
+  104  hls -rlth
+  105  ls -rlth
+  106  cd /Users/angelagraf/Desktop/Stat_Mech 
+  107  ls
+  108  ls -rlth
+  109  mv Stat_Mech_HW_01.pdf HW_01
+  110  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  111  ls -rlth
+  112  cd Class_Code
+  113  ls -rlth
+  114  cd Project_Euler
+  115  sl
+  116  ls -rlht
+  117  g++ euler.cpp
+  118  ./a.out
+  119  ls -rlth
+  120  cd .
+  121  c ..
+  122  ls -rlth
+  123  cd ..
+  124  ls -rlth
+  125  mkdir Swap_Function
+  126  cd Swap_Function
+  127  ls -rlth
+  128  vi myswap.cpp
+  129  g++ myswap.cpp
+  130  vi myswap.cpp
+  131  g++ myswap.cpp
+  132  vi myswap.cpp
+  133  g++ myswap.cpp
+  134  /.a.out
+  135  ./a.out
+  136  vi myswap.cpp
+  137  g++ myswap.cpp
+  138  vi myswap.cpp
+  139  g++ myswap.cpp
+  140  ./a.out
+  141  vi myswap.cpp
+  142  g++ myswap.cpp
+  143  ./a.out
+  144  cd
+  145  cd Downloads
+  146  ls -rlth
+  147  rm *
+  148  cd  Downloads
+  149  ls -rlth
+  150  vi 03_hw_csci1323.tex
+  151  ls -rlth
+  152  rm *.zip
+  153  ls -rlht
+  154  open 03_hw_csci1323_myname.tex
+  155  vi 03_hw_csci1323_myname.tex
+  156  mv 03_hw_csci1323_myname.tex 03_hw_csci1323_myname.txt
+  157  open 03_hw_csci1323_myname.txt
+  158  cd Downloads
+  159  ls -rlth
+  160  mv PhysRevA.98.062703.pdf /Users/angelagraf/Desktop/Honors_Thesis 
+  161  touch tmp.txt
+  162  open tmp.txt
+  163  cd /Users/angelagraf/Desktop/French_II 
+  164  touch Mon_Jan_23.txt
+  165  open Mon_Jan_23.txt
+  166  cd ~/Downloads
+  167  ls -rlth
+  168  rm *
+  169  cd
+  170  ssh agraf@zena21.cs.trinity.edu
+  171  history
+  172  history - 100
+  173   ssh agraf@xena04.cs.trinity.edu
+  174  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  175  ls -rlht
+  176  cd Class_Code
+  177  ls -rlth
+  178  mkdir Pointers
+  179  cd Pointers
+  180  vi pointer.cpp
+  181  mv pointer.cpp memory.cpp
+  182  vi memory.cpp
+  183  g++ memory.cpp
+  184  vi memory.cpp
+  185  g++ memory.cpp
+  186  vi memory.cpp
+  187  g++ memory.cpp
+  188  vi memory.cpp
+  189  vi memory.cpp
+  190  g++ memory.cpp
+  191  ./a.out
+  192  vi memory.cpp
+  193  g++ memory.cpp
+  194  vi memory.cpp
+  195  g++ memory.cpp
+  196  ls -lrht
+  197  vi memory.cpp
+  198  g++ memory.cpp
+  199  vi memory.cpp
+  200  g++ memory.cpp
+  201  vi memory.cpp
+  202  scp memory.cpp agraf@xena04.cs.trinity.edu/
+  203  ssh agraf@xena21.cs.trinity.edu
+  204  cd /Users/angelagraf/Desktop/Data_Abstraction /
+  205  ls -rlth
+  206  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  207  ls -rlth
+  208  cd Class_Code
+  209  ls -rlth
+  210  cd Pointers
+  211  valgrind ./a.out
+  212  vi memory.cpp
+  213  ssh agraf@xena21.cs.trinity.edu
+  214  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  215  cd Class_Code
+  216  ls -rlt
+  217  mkdir Stacks
+  218  cd Stacks
+  219  vi Stack.cpp
+  220  vi User.cpp
+  221  vi User.cpp
+  222  mv Stack.cpp stack.h
+  223  ls -rlth
+  224  vi User.cpp
+  225  g++ User.cpp
+  226  ls -rlth
+  227  vi User.cpp
+  228  vi stack.cpp
+  229  cd /Users/angelagraf/Desktop/French_II 
+  230  touch new.txt
+  231  open new.txt
+  232  ls -rlth
+  233  ls -rlth
+  234  open tmp
+  235  open tmp.txt
+  236  ssh agraf@xena21.cs.trinity.edu
+  237  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  238  ls -rlth
+  239  cd Class_Code
+  240  ls -rlth
+  241  cd Stacks
+  242  ls -rlth
+  243  vi stack.cpp
+  244  g++ user.cpp stack.cpp -o s
+  245  mv User.cpp user.cpp
+  246  g++ user.cpp stack.cpp -o s
+  247  ls
+  248  ./s
+  249  vi stack.cpp
+  250  vi user.cpp
+  251  g++ user.cpp stack.cpp -o s
+  252  vi user.cpp
+  253  ls
+  254  vi stack.cpp
+  255  g++ user.cpp stack.cpp -o s
+  256  vi stack.cpp
+  257  cd Downloads
+  258  ls 
+  259  mv Stat_Mech_HW_01.rnw Stat_Mech_HW_01.txt
+  260  open Stat_Mech_HW_01.txt
+  261  cd /Users/angelagraf/Desktop/Data_Abstraction/Reading_Notes 
+  262  touch Chapter_7_Reading_Notes.txt
+  263  open Chapter_7_Reading_Notes.txt
+  264  ssh agraf@xena21.cs.trinity.edu
+  265  sudo snap install pdftk
+  266  cd Downloads
+  267  ls -rlht
+  268  rm *
+  269  ls -rlth
+  270  pdfseparate
+  271  pdftk
+  272  ls
+  273  open pdftk_server-2.02-mac_osx-10.6-setup.pkg
+  274  pdftk
+  275  pdftk man
+  276  man pdftk
+  277  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  278  ls -rlht
+  279  pdfseparate -f 171 -l 199 The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf out_tmp.pdf
+  280  pdfseparate -f 171 -l 199 The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf out_tmp.pdf
+  281  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 171-199 output foo.pdf
+  282  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 187-215 output Chapter_07.pdf
+  283  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 186-214 output Chapter_07.pdf
+  284  cd Downloads
+  285  ls -rlth
+  286  rm *
+  287  ls -rlth
+  288  cd
+  289  pdftk
+  290  cd Downloads
+  291  ls -rlth
+  292  open pdftk_server-2.02-mac_osx-10.11-setup.pkg
+  293  open pdftk_server-2.02-mac_osx-10.11-setup.pkg
+  294  cd
+  295  pdftk --version
+  296  man pdftk
+  297  pdftk
+  298  clear;/Applications/WolframScript.app/Contents/MacOS/wolframscript ;exit
+  299  clear;/Applications/WolframScript.app/Contents/MacOS/wolframscript ;exit
+  300  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  301  ls -rlth
+  302  cd Class_Code
+  303  ls -rlth
+  304  ls -rlth
+  305  mkdir Queues
+  306  cd Queues
+  307  ls -rlth
+  308  touch ArrayStack.h
+  309  rm *
+  310  touch ArrayQueue.h
+  311  ls -rlth
+  312  ls -rlth
+  313  touch ah.cpp
+  314  vi ah.cpp
+  315  ls -rlth
+  316  vi ah.cpp
+  317  vi ah.cpp
+  318  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  319  touch submissionnotes.txt
+  320  open submissionnotes.txt
+  321  cd
+  322  ssh agraf@xena21.cs.trinity.edu
+  323  cd Downloads
+  324  ls -rlth
+  325  vi MyNchannelSqrWell-Share-Enorm.nb
+  326  ssh agraf@xena21.cs.trinity.edu
+  327  ssh agraf@xena21.cs.trinity.edu
+  328  cd Desktop
+  329  mkdir ctesting
+  330  cd ctesting
+  331  touch stack.h
+  332  mv stack.h Stack.h
+  333  vi Stack.h
+  334  vi Queue.h
+  335  vi Stack.cpp
+  336  vi ArrayStack.cpp
+  337  vi ArrayStack.h
+  338  vi Stack.cpp
+  339  cp Stack.cpp ArrayStack.h
+  340  vi ArrayStack.h
+  341  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  342  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 59-85 output Chapter_03.pdf
+  343  ls
+  344  open Chapter_03.pdf
+  345  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 74-100 output Chapter_03.pdf
+  346  open Chapter_03.pdf
+  347  cd Reading_Notes
+  348  ls -rlth
+  349  touch Chapter_3_Reading_Notes.txt
+  350  open Chapter_3_Reading_Notes.txt
+  351  pwdf
+  352  pwd
+  353  scp /Users/angelagraf/Desktop/ctesting agraf@xena21.cs.trinity.edu
+  354  scp -r /Users/angelagraf/Desktop/ctesting agraf@xena21.cs.trinity.edu
+  355  ssh agraf@xena21.cs.trinity.edu
+  356  ssh agraf@xena22.cs.trinity.edu
+  357  cd /Users/angelagraf/Desktop/ctesting 
+  358  ls -rlth
+  359  less Stack.h
+  360  less ArrayStack.h
+  361  ls -rlth
+  362  less Stack.cpp
+  363  ls -rlth
+  364  ssh agraf@xena21.cs.trinity.edu
+  365  ssh agraf@xena21.cs.trinity.edu
+  366  ssh agraf@xena21.cs.trinity.edu
+  367  ssh agraf@xena21.cs.trinity.edu
+  368  cd Downloads
+  369  ls -rlth
+  370  open 05_hw_csci1323.zip
+  371  mv /Users/angelagraf/Downloads/05_hw_csci1323_myname.tex tmp.txt
+  372  open tmp.txt
+  373  ssh agraf@xena21.cs.trinity.edu
+  374  ssh agraf@xena21.cs.trinity.edu
+  375  cd Downloads
+  376  ls -rlth
+  377  vi StackQueueTest.cpp
+  378  vi StackQueueTest.cpp
+  379  ssh agraf@xena21.cs.trinity.edu
+  380  ssh agraf@xena21.cs.trinity.edu
+  381  vi ArrayStack_tmp.h
+  382  cd Downloads
+  383  ls -rlth
+  384  ssh agraf@xena21.cs.trinity.edu
+  385  ssh agraf@xena21.cs.trinity.edu
+  386  cd Downloads
+  387  ls -rlth
+  388  cd Downloads
+  389  ls -rlth
+  390  open BPC-02-07-2023-v00-semifinal\ \(1\).pdf
+  391  ssh agraf@xena21.cs.trinity.edu
+  392  ssh agraf@xena21.cs.trinity.edu
+  393  ssh agraf@xena21.cs.trinity.edu
+  394  ssh agraf@xena21.cs.trinity.edu
+  395  ssh agraf@xena21.cs.trinity.edu
+  396  ssh agraf@xena21.cs.trinity.edu\n
+  397  ssh agraf@xena21.cs.trinity.edu
+  398  ssh agraf@xena21.cs.trinity.edu
+  399  ssh agraf@xena22.cs.trinity.edu
+  400  ssh agraf@xena21.cs.trinity.edu
+  401  ssh agraf@xena21.cs.trinity.edu
+  402  ssh agraf@xena22.cs.trinity.edu
+  403  pwdf
+  404  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  405  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 102-125 output Chapter_04.pdf\n
+  406  ls -rlth
+  407  open Chapter_04.pdf
+  408  open Chapter_04.pdf
+  409  ls -rlth
+  410  ssh agraf@xena21.cs.trinity.edu
+  411  ssh agraf@xena22.cs.trinity.edu
+  412  ssh agraf@xena21.cs.trinity.edu
+  413  ssh agraf@xena24.cs.trinity.edu
+  414  ssh agraf@xena21.cs.trinity.edu
+  415  ssh agraf@xena21.cs.trinity.edu
+  416  ssh agraf@xena21.cs.trinity.edu
+  417  ssh agraf@xena21.cs.trinity.edu
+  418  ssh agraf@xena21.cs.trinity.edu
+  419  ssh mathuser@marie.phys.trinity.edu
+  420  sudo sh -c /bin/echo -n enabled > /Library/Preferences/com.apple.ScreenSharing.launchd
+  421  sudo sh -c /bin/echo -n enabled > /Library/Preferences/com.apple.ScreenSharing.launchd
+  422  mv /Users/angelagraf/Downloads/06_hw_csci1323_myname.tex /Users/angelagraf/Downloads/06_hw_csci1323_myname.txt
+  423  ls -rlth
+  424  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  425  ls -rlth
+  426  rm Chapter_0*
+  427  ls -rlth
+  428  open Chapter_04.pdf
+  429  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 126-145 output Chapter_04.pdf\n
+  430  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 126-147 output Chapter_04.pdf\n
+  431  ls -rlth
+  432  ssh agraf@xena21.cs.trinity.edu
+  433  ssh agraf@xena21.cs.trinity.edu
+  434  cd Desktop
+  435  rm -r ctesting
+  436  mkdir cpp
+  437  mv ../Downloads/*.h ./cpp
+  438  cd Downloads
+  439  mv *.cpp ../Desktop/cpp
+  440  ssh agraf@xena21.cs.trinity.edu
+  441  ssh agraf@xena25.cs.trinity.edu
+  442  ssh agraf@xena24.cs.trinity.edu
+  443  ssh agraf@xena01.cs.trinity.edu
+  444  ssh agraf@xena02.cs.trinity.edu
+  445  cd Desktop
+  446  ls -rlth
+  447  mkdir Mehta_Lab
+  448  cd Mehta_Lab
+  449  gh repo clone mehta-group-at-trinity-university/AtomIon1D
+  450  git clone https://github.com/mehta-group-at-trinity-university/AtomIon1D.git
+  451  ls -rlth
+  452  cd AtomIon1D
+  453  ls -rlth
+  454  which gfortran
+  455  cd
+  456  git clone https://github.com/Homebrew/brew homebrew
+  457  brew install --cask simply-fortran
+  458  brew install --cask simply-fortran
+  459  eval "$(homebrew/bin/brew shellenv)"
+  460  brew update --force --quiet
+  461  chmod -R go-w "$(brew --prefix)/share/zsh"
+  462  brew install --cask simply-fortran
+  463  cd /Users/angelagraf/Desktop/Mehta_Lab 
+  464  ls -rlth
+  465  cd AtomIon1D
+  466  ls -rlht
+  467  ls -rlth
+  468  make
+  469  ./AtomIon1D.x < AtomIon1D.par
+  470  rm *.x
+  471  rm *.o
+  472  make
+  473  which gfortran
+  474  ssh agraf@xena02.cs.trinity.edu
+  475  ls
+  476  ls -rlth
+  477  ssh agraf@xena21.cs.trinity.edu
+  478  ssh agraf@xena02.cs.trinity.edu
+  479  ls -rlht
+  480  rm agraf@xena21.cs.trinity.edu
+  481  cd agraf@xena21.cs.trinity.edu
+  482  ls -rlth
+  483  cd ..
+  484  ls -rlth
+  485  clear
+  486  ssh agraf@xena21.cs.trinity.edu\n
+  487  ssh agraf@xena02.cs.trinity.edu
+  488  ssh agraf@xena21.cs.trinity.edu
+  489  ssh agraf@xena22.cs.trinity.edu
+  490  ssh agraf@xena20.cs.trinity.edu
+  491  ssh agraf@xena21.cs.trinity.edu
+  492  ssh agraf@xena21.cs.trinity.edu
+  493  ssh agraf@xena21.cs.trinity.edu
+  494  ssh agraf@xena01.cs.trinity.edu
+  495  ssh agraf@xena02.cs.trinity.edu
+  496  quit
+  497  ls -rlth
+  498  cd Desktop
+  499  ls -rlth
+  500  cd Mehta_Lab
+  501  ls -rlth
+  502  cd AtomIon1D
+  503  brew install arpack
+  504  cd
+  505  brew install arpack
+  506  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+  507  eval "$(/opt/homebrew/bin/brew shellenv)"
+  508  brew install arpack
+  509  vi ~/.bash_rc
+  510  vi ~/.bash_profile
+  511  echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bash_profile
+  512  source .bash_profile
+  513  brew install arpack
+  514  vi ~/.bash_profile
+  515  ls -rlth
+  516  cd homebrew
+  517  ls -rlth
+  518  vi README.md
+  519  brew help
+  520  ls -rlth
+  521  cd 
+  522  ls -rlth
+  523  mv homebrew /usr/local/bin/
+  524  sudo mv homebrew /usr/local/bin/
+  525  ls -rlth
+  526  vi ~/.bash_profile
+  527  source ~/.bash_profile
+  528  vi ~/.bash_profile
+  529  vi ~/.bash_profile
+  530  vi ~/.bash_profile
+  531  vi help
+  532  source ~/.bash_profile
+  533  ls -lrht
+  534  vi ~/.sourceprofile
+  535  vi ~/.bash_profile
+  536  source ~/.bash_profile
+  537  ls -rlht
+  538  vi h
+  539  brew install arpack
+  540  vi ~/.zshrc
+  541  brew install arpack
+  542  brew install arpack
+  543  source ~/.zshrc
+  544  vi ~/.zshrc
+  545  source ~/.zshrc
+  546  brew install arpack
+  547  ls -rlth
+  548  xcode-select --install
+  549  sudo port install openmotif
+  550  sudo port install grace
+  551  install grace
+  552   wget ftp://ftp.fu-berlin.de/unix/graphics/grace/src/grace5/grace-5.1.23.tar.gz
+  553  sudo port install openmotif
+  554  vi ~/.bash_profile
+  555  source ~/.bash_profile
+  556  sudo port install openmotif
+  557  mv ~/.bash_profile ~/.profile
+  558  source ~/.profile
+  559  sudo port install openmotif
+  560  mv ~/.profile ~/.bash_profile
+  561  cd /Users/angelagraf/Desktop/Mehta_Lab 
+  562  ls -rlth
+  563  cd AtomIon1D
+  564  which gfortran
+  565  make
+  566  which gfortran
+  567  gfortran
+  568  export PATH=$PATH:/usr/local/bin
+  569  gfortran -v
+  570  locate gfortran
+  571  sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist
+  572  locate gfortran
+  573  sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.locate.plist
+  574  ps x
+  575  locate fortran
+  576  vi ~/.zshrc
+  577  vi ~/.zshrc
+  578  cd /usr/local/bin/homebrew/bin
+  579  ls- rlth
+  580  ls -rlht
+  581  cd ..
+  582  ls -rlth
+  583  cd ..
+  584  ls -rlth
+  585  cd
+  586  ls -rlth
+  587  which fortran
+  588  fortran =v
+  589  fortran -v
+  590  brew install gcc
+  591  fortran
+  592  ls -rlth
+  593  cd Fortran
+  594  cd
+  595  cd Fortran
+  596  ls -rlth
+  597  cd
+  598  rm Fortran
+  599  rm -r Fortran
+  600  ls -rlth
+  601  cd /Users/angelagraf/Desktop/Mehta_Lab 
+  602  brew install --cask simply-fortran
+  603  which fortran
+  604  locate fortran
+  605  source /Applications/Simply Fortran.app
+  606  source /Applications/Simply\ Fortran.app
+  607  which fortran
+  608  ls -rlth
+  609  which fortran
+  610  cd
+  611  echo $shell
+  612  cd
+  613  echo $shell
+  614  ls -rlth
+  615  cd /Users/angelagraf/Desktop/Data_Abstraction 
+  616  % pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 150-184 output Chapter_06.pdf
+  617  ls -rlth
+  618  % pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 150-184 output Chapter_06.pdf
+  619  pdftk The_C++_Programming_Language_4th_Edition_Bjarne_Stroustrup.pdf cat 150-184 output Chapter_06.pdf
+  620  ls -rlth
+  621  ssh agraf@xena21.cs.trinity.edu
+  622  g++ userarray.cpp
+  623  g++ userarray.cpp
+  624  g++ userarray.cpp
+  625  g++ -std=c++11 userarray.cpp
+  626  ls -rlth
+  627  ./a.out
+  628  g++ -std=c++11 userarray.cpp
+  629  g++ -std=c++11 userarray.cpp
+  630  ./a.out
+  631  g++ -std=c++11 userarray.cpp
+  632  g++ -std=c++11 userarray.cpp
+  633  g++ -std=c++11 userarray.cpp
+  634  ./a.out
+  635  g++ -std=c++11 userarray.cpp
+  636  g++ -std=c++11 userarray.cpp
+  637  g++ -std=c++11 userarray.cpp
+  638  g++ -std=c++11 userarray.cpp
+  639  g++ -std=c++11 userarray.cpp
+  640  g++ -std=c++11 userarray.cpp
+  641  g++ -std=c++11 userarray.cpp
+  642  g++ -std=c++11 userarray.cpp
+  643  g++ -std=c++11 userarray.cpp
+  644  g++ -std=c++11 userarray.cpp
+  645  g++ -std=c++11 userarray.cpp
+  646  g++ -std=c++11 userarray.cpp
+  647  ./a.out
+  648  g++ -std=c++11 userarray.cpp
+  649  g++ -std=c++11 userarray.cpp
+  650  ./a.out
+  651  ./a.out
+  652  g++ -std=c++11 userarray.cpp
+  653  g++ -std=c++11 userarray.cpp
+  654  ./a.out
+  655  ./a.out
+  656  g++ -std=c++11 userarray.cpp
+  657  ./a.out
+  658  g++ -std=c++11 userarray.cpp
+  659  ./a.out
+  660  g++ -std=c++11 userarray.cpp
+  661  ./a.out
+  662  g++ -std=c++11 userarray.cpp
+  663  ./a.out
+  664  g++ -std=c++11 userarray.cpp
+  665  ./a.out
+  666  g++ -std=c++11 userarray.cpp
+  667  ./a.out
+  668  g++ -std=c++11 userarray.cpp
+  669  ./a.out
+  670  g++ -std=c++11 userarray.cpp
+  671  ./a.out
+  672  g++ -std=c++11 userarray.cpp
+  673  ./a.out
+  674  g++ -std=c++11 userarray.cpp
+  675  ./a.out
+  676  g++ -std=c++11 userarray.cpp
+  677  ./a.out
+  678  g++ -std=c++11 userarray.cpp
+  679  ./a.out
+  680  g++ -std=c++11 userarray.cpp
+  681  ./a.out
+  682  g++ -std=c++11 userarray.cpp
+  683  ./a.out
+  684  g++ -std=c++11 userarray.cpp
+  685  g++ -std=c++11 userarray.cpp
+  686  g++ -std=c++11 userarray.cpp
+  687  ./a.out
+  688  g++ -std=c++11 userarray.cpp
+  689  ./a.out
+  690  g++ -std=c++11 userarray.cpp
+  691  ./a.out
+  692  g++ -std=c++11 userarray.cpp
+  693  ./a.out
+  694  g++ -std=c++11 userarray.cpp
+  695  g++ -std=c++11 userarray.cpp
+  696  g++ -std=c++11 userarray.cpp
+  697  ./a.out
+  698  g++ -std=c++11 userarray.cpp
+  699  ./a.out
+  700  g++ -std=c++11 userarray.cpp
+  701  g++ -std=c++11 userarray.cpp
+  702  g++ -std=c++11 userarray.cpp
+  703  ./a.out
+  704  g++ -std=c++11 userarray.cpp
+  705  ./a.out
+  706  g++ -std=c++11 userarray.cpp
+  707  ./a.out
+  708  g++ -std=c++11 userarray.cpp
+  709  g++ -std=c++11 userarray.cpp
+  710  g++ -std=c++11 userarray.cpp
+  711  ./a.out
+  712  ./a.out
+  713  g++ -std=c++11 userarray.cpp
+  714  g++ -std=c++11 userarray.cpp
+  715  ./a.out
+  716  g++ -std=c++11 userarray.cpp
+  717  g++ -std=c++11 userarray.cpp
+  718  g++ -std=c++11 userarray.cpp
+  719  ./a.out
+  720  g++ -std=c++11 userarray.cpp
+  721  ./a.out
+  722  vi ~/.zshrc
+  723  locate fortran
+  724  vi ~/.zshrc
+  725  :q
+  726  vi ~/.zshrc
+  727  cd ..
+  728  cd //
+  729  cd ..
+  730  cd ..
+  731  cd ..
+  732  ls -rlth
+  733  cd Applications
+  734  ls -rlht
+  735  cd Simply\ Fortran.app
+  736  ls -rlth
+  737  cd Contents
+  738  ls -rlht
+  739  cd MacOS
+  740  ls -rlth
+  741  cd ../Resources
+  742  ls -rtlh
+  743  cd doc
+  744  less docs
+  745  cd docs
+  746  ls -rlth
+  747  cd ..
+  748  ls -rlth
+  749  cd SimplyFortran.help
+  750  ls -rlth
+  751  cd Contents
+  752  ls -rlth
+  753  cd Resources
+  754  ls -rlth
+  755  cd English.lproj
+  756  ls -rlth
+  757  cd
+  758  vi ~/.zshrc
+  759  cd ..
+  760  cd ..
+  761  ls -rlth
+  762  cd Applications
+  763  ls -rthl
+  764  cd Simply\ Fortran.app
+  765  pwd
+  766  vi ~/.zshrc
+  767  vi ~/.zshrc
+  768  vi ~/.zshrc
+  769  vi ~/.zshrc
+  770  vi ~/.zshrc
+  771  vi ~/.zshrc
+  772  ls -rlth
+  773  vi ~/.zshrc
+  774  ls -rlth
+  775  cd
+  776  cd
+  777  cd ..
+  778  cd ..
+  779  cd ..
+  780  ls -rlht
+  781  ls
+  782  ls
+  783  source ~/.bash_profile
+  784  ls -rlth
+  785  brew reinstall ncurses
+  786  ls 
+  787  ls
+  788  vi zsh
+  789  ls
+  790  ls -rlth
+  791  vi ~/.zsh
+  792  vi ~/.zshrc
+  793  vi ~/.zshrc
+  794  vi ~/.bash_profile
+  795  ls -rlth
+  796  vi ~/.zprofile
+  797  ls -rlth
+  798   vi ~/.zprofile
+  799  ls -rtlh
+  800  ls -rltha
+  801  ls -rlth
+  802  ls -rltha
+  803  ls -rlth
+  804  vi ~/.zshrc
+  805  ls -rlht
+  806  vi ~/.zshrc
+  807  vi ~/.zprofile
+  808  ls
+  809  vi ~/.zprofile
+  810  vi ~/.zshrc
+  811  gfortran -v
+  812  fortran -v
+  813  locate fortran
+  814  export PATH=$PATH:/usr/local/bin
+  815  gfortran -v
+  816  export PATH=$PATH:/usr/local/bin
+  817  gfortran -v
+  818  ifort -v
+  819  /usr/local/bin
+  820  cd /usr/local/bin
+  821  ls -rlth
+  822  ls -rlth
+  823  cd homebrew
+  824  ls -rlth
+  825  cd ..
+  826  cd
+  827  cd ..
+  828  cd ..
+  829  ls -rlth
+  830  mv /Applications/Simply\ Fortran.app /usr/local/bin/
+  831  sudo mv /Applications/Simply\ Fortran.app /usr/local/bin/
+  832  ls -rlth
+  833  cd Applications
+  834  ls -rtlh
+  835  cd
+  836  ls -rlth
+  837  /usr/local/bin
+  838  export PATH=$PATH:/usr/local/bin
+  839  ls -rlht
+  840  which gfortran
+  841  which fortran
+  842  gfortran -v
+  843  brew install gcc
+  844  sudo mv /usr/local/bin/Simply\ Fortran.app /Applications/
+  845  ls -rlth
+  846  cd ../../Applications/Simply\ Fortran.app
+  847  ls -rtlh
+  848  cd
+  849  brew install gcc
+  850  ls -rlth
+  851  cd /usr/local/bin
+  852  ls -rlth
+  853  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  854  eval $(/opt/homebrew/bin/brew shellenv)
+  855  mv /usr/local/bin/homebrew /opt/
+  856  sudo mv /usr/local/bin/homebrew /opt/
+  857  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  858  eval $(/opt/homebrew/bin/brew shellenv)
+  859  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  860  eval $(/opt/homebrew/bin/brew shellenv)
+  861  brew help
+  862  ls -rlth
+  863  ls -rlth
+  864  brew install gcc
+  865  cd
+  866  brew update
+  867  man -k fortran
+  868  which gfortran
+  869  brew install gcc
+  870  mv /opt/homebrew /usr/local/homebrew
+  871  sudo mv /opt/homebrew /usr/local/homebrew
+  872  brew
+  873  brew install gcc
+  874  vi ~/.zprofile
+  875  vi ~/.zprofile
+  876  vi ~/.zprofile
+  877  brew install gcc
+  878  vi ~/.zprofile
+  879  vi ~/.zprofile
+  880  sudo mv /usr/local/homebrew /opt/
+  881  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  882    eval $(/opt/homebrew/bin/brew shellenv)
+  883  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  884  eval $(/opt/homebrew/bin/brew shellenv)
+  885  brew help
+  886  brew install gcc
+  887  git clone git@github.com:Homebrew/homebrew.git ~/usr/local/
+  888  brew install gcc
+  889  ls /optt
+  890  ls /opt
+  891  ls /usr
+  892  locate cellar
+  893  locate Cellar
+  894  ln -sf /usr/local/bin/brew
+  895  brew
+  896  brew config
+  897  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+  898  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+  899  brew list
+  900  locate simply-fortran
+  901  sudo apt-get install gfortran
+  902  sudo pacman -S gcc-fortran
+  903  ls -rlth
+  904  ls brew
+  905  brew
+  906  brew install gcc
+  907  brew bundle dump
+  908  brew install gcc
+  909  ls
+  910  cd brew
+  911  ls -rlth
+  912  cd
+  913  which gfortran
+  914  gfortran
+  915  sudo apt-get install gfortran
+  916  /usr/bin/apt-get
+  917  sudo dpkg -i apt_1.9.3_i386.deb
+  918  brew install gfortran
+  919  /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+  920  arch -arm64 brew install gfortran
+  921  cd 
+  922  ls -rlth
+  923  cd /usr/local/bin
+  924  ls -rtlh
+  925  mkdir homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C homebrew
+  926  sudo mkdir homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C homebrew
+  927  ls -rtlh
+  928  rm -r homebrew
+  929  sudo rm -r homebrew
+  930  ls -rtlh
+  931  git clone https://github.com/Homebrew/brew homebrew
+  932  sudo git clone https://github.com/Homebrew/brew homebrew
+  933  ls
+  934  cd
+  935  brew install gfortran
+  936  ls
+  937  rm -r /opt/homebrew
+  938  y
+  939  y
+  940  y
+  941  y
+  942  y
+  943  y
+  944  y
+  945  y
+  946  y
+  947  ls -rlth
+  948  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+  949  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+  950  rm -r /usr/local/bin/homebrew/
+  951  sudo rm -r /usr/local/bin/homebrew/
+  952  ls -rlht
+  953  xcode-select --install
+  954  Software Update
+  955  xcodebuild -license
+  956  git clone https://github.com/Homebrew/brew homebrew
+  957  eval "$(homebrew/bin/brew shellenv)"
+  958  brew update --force --quiet
+  959  brew
+  960  brew install gfortran
+  961  locate brew
+  962  ls -rlth
+  963  vi ~/.zprofile
+  964  brew help
+  965  brew
+  966  ls /opt/
+  967  ls /usr/local/bin
+  968  locate brew
+  969  /usr/local/bin/homebrew/
+  970  export PATH="/usr/local/bin:$PATH" >> ~/.zshrc
+  971  brew
+  972  i ~/.zprofile
+  973  vi ~/.zprofile
+  974  vi ~/.zshrc
+  975  ls
+  976  vi ~/.zshrc
+  977  vi ~/.zprofile
+  978  brew doctor
+  979  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/atubasi/.zprofile
+  980  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/agraf/.zprofile
+  981  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+  982  eval "$(/opt/homebrew/bin/brew shellenv)"
+  983  eval "$(/usr/local/bin/homebrew/bin/brew shellenv)"
+  984  eval "$(/usr/local/homebrew/bin/brew shellenv)"
+  985  echo $PATH
+  986  echo $PATH
+  987  vi ~/.zprofile
+  988  vi ~/.zprofile
+  989  echo $PATH
+  990  vi ~/.zshrc
+  991  echo $PATH
+  992  locate .sdkman
+  993  ls r-tlh
+  994  ls -rlth
+  995  echo 'eval $(/opt/homebrew/bin/brew shellenv)' >> /Users/$USER/.zprofile
+  996   eval $(/opt/homebrew/bin/brew shellenv)
+  997  vi ~/.zprofile
+  998  ls -rtlh
+  999  brew tap homebrew/command-not-found
+ 1000  vi ~/.zprofile
+ 1001  vi ~/.zprofile
+ 1002  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+ 1003  /bin/bash uninstall.sh --help
+ 1004  curl -o
+ 1005  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+ 1006  echo; echo 'eval "$(/usr/local/bin/brew shellenv)"') >> /Users/angelagraf/.zprofile
+ 1007  echo 'eval "$(/usr/local/bin/brew shellenv)"') >> /Users/angelagraf/.zprofile
+ 1008  echo 'eval "$(/usr/local/bin/brew shellenv)"') >> /Users/angelagraf/.zprofile
+ 1009  vi ~/.zprofile
+ 1010  vi ~/.zprofile
+ 1011  eval "$(/usr/local/bin/brew shellenv)"
+ 1012  brew 
+ 1013  brew install gcc
+ 1014  which gfortran
+ 1015  gfortran
+ 1016  cd /Users/angelagraf/Desktop/Mehta_Lab 
+ 1017  cd AtomIon1D/
+ 1018  ls r-lth
+ 1019  ls -rtlh
+ 1020  gfortran -v
+ 1021  history > history.txt
+ 1022  open history.txt
