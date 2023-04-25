@@ -127,6 +127,8 @@ c      call MyLargeDsband(NumStates,Shift,Energies,Psi,MatrixDim,H,S,LeadDim,Hal
          write(Out,*) eEnergies(k)
       enddo
 
+      
+
 c      write(910,*) 'Predicted eEnergies'
 c      do k = 1,xDim
 c         n = n+1
@@ -553,13 +555,9 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 c         constLeft = MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1)) - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft /!!!!change this block and the constRight block to match the conventions used in notes
 c     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - 
 c     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
-c         constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))
-c   >       + MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/
-c   >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft + 
-c   >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
          constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))
-     >       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/
-     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - 
+     >       + MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/
+     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft + 
      >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
          do k = 1,xNumPoints-1
             ax = xPoints(k)
@@ -631,14 +629,10 @@ c   >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
             Count = Count + 1
          enddo
       case(3)
-         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) !!change
-     >        -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( 
-     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
-     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
-c            constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) !!change
-c   >        -MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( 
-c   >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
-c   >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
+         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))
+     >        -MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( 
+     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
+     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
