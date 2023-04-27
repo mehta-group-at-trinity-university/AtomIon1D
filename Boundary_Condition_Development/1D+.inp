@@ -2,7 +2,7 @@ NumStates
 10
 
 Left	Right
-3	0
+0	3
 
 Legendre File
 Legendre.dat
@@ -17,7 +17,7 @@ m1	m2
 1.d0	1.d0
 
 Dcoef			Rscale		kLeft		kRight
--4.899828818866035d0	3.0d0		1000.d0		0.d0
+-4.899828818866035d0	3.0d0		0.d0		-10000.d0
 
 xNumPoints	xLast	RSteps
 100		1.d0	10

@@ -200,10 +200,11 @@ c     must move this block inside the loop over iR if the grid is adaptive
          call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
          if(CalcNewBasisFunc.eq.1) then
             print*, 'done... Calculating Basis functions'
-            call CalcBasisFuncs(Left,Right,Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right,Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,0,u)
-            call CalcBasisFuncs(Left,Right,Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right,Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,2,uxx)
+c ^^^ changed 'CalcBasisFuncs' to 'CalcBasisFuncsBP' here
          endif
          print*, 'done... Calculating overlap matrix'
 c     must move this block inside the loop if the grid is adaptive
@@ -413,6 +414,7 @@ c         write(400,20) R(iR),R(iR)**3.0d0*(Energies(2,1)-Q(2,2))
 
       stop
       end
+      
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,
      >     xNumPoints,u,xBounds,HalfBandWidth,S)

@@ -434,11 +434,12 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
       subroutine CalcBasisFuncsBP(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,
      >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
-
+      implicit none
       integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
      >     xNumPoints,Deriv
       double precision xPoints(*),xLeg(*)
       double precision u(LegPoints,xNumPoints,MatrixDim)
+      double precision xScale
 
       integer i,k,l,Count
       integer, allocatable :: t(:)
@@ -654,7 +655,9 @@ c   >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNu
 
       return
       end
-      
+cc run with 0 0 and it should give results
+cc try 3 3 and large values for both <-- should give same spectrum as 0 0 too :)
+cc THEN: what do we actually use for hyperradius
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
       double precision function MyBSpline(Order,Deriv,xNumPoints,
