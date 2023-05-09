@@ -17,8 +17,8 @@ AtomIon1D.o: AtomIon1D.f
 #matrix_stuff.o: matrix_stuff.f
 #	${CMP} ${FORCEDP} ${CMPFLAGS} -c matrix_stuff.f
 
-Bsplines.o:	Bsplines.f
-	${CMP} ${FORCEDP} ${CMPFLAGS} -c Bsplines.f
+Bsplines.o:	Bsplines.f90
+	${CMP} ${FORCEDP} ${CMPFLAGS} -c Bsplines.f90
 
 nrtype.mod: modules_qd.o
 	${CMP} ${FORCEDP} modules_qd.o

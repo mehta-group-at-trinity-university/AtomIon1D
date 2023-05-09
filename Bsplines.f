@@ -1,7 +1,7 @@
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ccccc new CalcBasisFuncsBP as of April 26, 2023 ccccc
 cc Declared kLeft and kRight in here; 
-      subroutine CalcBasisFuncsBP(Left,Right,Order,xPoints,LegPoints,
+      subroutine CalcBasisFuncsBP(Left,Right,kLeft, kRight, Order,xPoints,LegPoints,
      >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
       implicit none
       integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
@@ -17,13 +17,6 @@ cc Declared kLeft and kRight in here;
       double precision kLeft,kRight,constLeft,constRight,lc1n,lc2n,rc1n,rc2n
 
       allocate(t(xNumPoints+2*Order))
-
-      kLeft = 1000
-      kRight = 0
-
-c      kLeft = (R/r^2)sqrt(((1+mu^2)/mu)-(r^2/R^2))*COT(-(1/r)+phi)
-      
-c      kRight = -kLeft
 
       do i = 1,Order
        t(i) = 1

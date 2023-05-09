@@ -10,6 +10,8 @@ c     234567890
       DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX
       double precision xMin,xMax
       double precision, allocatable :: R(:)
+      double precision, allocatable :: kLeft(:) !!making kLeft and kRight allocatable
+      double precision, allocatable :: kRight(:)
       double precision, allocatable :: xPoints(:)
 
       logical, allocatable :: Select(:)
@@ -23,6 +25,7 @@ c     234567890
       double precision Tol,RChange
       double precision TotalMemory
       double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
+c      double precision kLeft, kRight
 
       double precision, allocatable :: LUFac(:,:),workl(:)
       double precision, allocatable :: workd(:),Residuals(:)
@@ -114,10 +117,14 @@ c     SET UP A LOG-GRID IN THE HYPERRADIUS
       StepX=(XLast-XFirst)/(RSteps-1.d0)
       
       allocate(R(RSteps))
+      allocate(kLeft(RSteps)) ! making array for kLeft and right because the bdry conditions are different at each R
+      allocate(kRight(RSteps))
       do i = 1,RSteps
 c     read(5,*) R(i)
 c     R(i)= (XFirst+(i-1)*StepX)**3
-         R(i)= 10.d0**(XFirst+(i-1)*StepX)
+         R(i) = 10.d0**(XFirst+(i-1)*StepX)
+c         kLeft(i) = R(i)/rai
+c         kRight(i) = -kLeft(i)
       enddo
 
 c      if (mod(xNumPoints,2) .ne. 0) then
@@ -193,17 +200,28 @@ c     must move this block inside the loop over iR if the grid is adaptive
          xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
          xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
 
+c         kLeft = 1000.d0;
+c         kLeft = (R/Rbc**2)*sqrt(((1+mu**2)/mu)-(Rbc**2/R**2))*COTAN(-(1/Rbc)+phiai)
+c         kRight = -kLeft
+
+         print*, 'iR = ', iR
+
+         kLeft(iR) = R(iR)/Rbc * sqrt(((1+mu**2)/mu)-(Rbc**2)/R(iR)**2)*COTAN(-(1/Rbc)+phiai) !But this Rbc is different from rbc
+         kRight(iR) = -kLeft(iR)
+
          if(xMax.le.xMin) then
             write(6,*) "minimum hyperradius too small."
             stop
          endif
          call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
-         if(CalcNewBasisFunc.eq.1) then
+         if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
+c each triade of R (+,-,0) will have a different physical set -- 
             print*, 'done... Calculating Basis functions'
-            call CalcBasisFuncsBP(Left,Right,Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right, kLeft(iR), kRight(iR), Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,0,u)
-            call CalcBasisFuncsBP(Left,Right,Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right, kLeft(iR), kRight(iR), Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,2,uxx)
+c two more calcbasisfuncs for kLeft +- delta R
 c ^^^ changed 'CalcBasisFuncs' to 'CalcBasisFuncsBP' here
          endif
          print*, 'done... Calculating overlap matrix'
@@ -214,7 +232,7 @@ c-------------------------------------------------------------------------------
 
          if (CouplingFlag .ne. 0) then
             
-            RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt
+            RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt < might be better
             write(6,*) 'Calculating Hamiltonian'
             call CalcHamiltonian(alpha,RLeft,mu,mi,phiai,C4,L,Order,xPoints,
      >           LegPoints,xLeg,wLeg,xDim,xNumPoints,u,
@@ -554,6 +572,10 @@ c     double precision TempPot,VInt,VTempInt
 
             rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))
 
+c this may be a good spot to write kLeft
+c         kLeft = (R/Rbc**2)*sqrt(((1+mu**2)/mu)-(Rbc**2/R**2))*COTAN(-(1/Rbc)+phiai)
+c         kRight = -kLeft
+
             potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
             Pot(lx,kx) = alpha*potvalue
 c            write(24,*) kx, lx, Pot(lx,kx)
@@ -568,9 +590,9 @@ c            write(24,*) kx, lx, Pot(lx,kx)
                xTempT = 0.0d0
                xTempV = 0.0d0
                do lx = 1,LegPoints
-                  a = wLeg(lx)*xIntScale(kx)*u(lx,kx,ix)
-                  xTempT = xTempT + a*uxx(lx,kx,ixp)
-                  xTempV = xTempV + a*(Pot(lx,kx))*u(lx,kx,ixp)
+                  a = wLeg(lx)*xIntScale(kx)*u(lx,kx,ix) !bra
+                  xTempT = xTempT + a*uxx(lx,kx,ixp) !KE operator !ket
+                  xTempV = xTempV + a*(Pot(lx,kx))*u(lx,kx,ixp) !PE operator ket
                enddo
                xT(ix,ixp) = xT(ix,ixp) + xTempT
                xV(ix,ixp) = xV(ix,ixp) + xTempV
