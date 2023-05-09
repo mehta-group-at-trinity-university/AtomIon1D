@@ -10,8 +10,8 @@ c     234567890
       DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX
       double precision xMin,xMax
       double precision, allocatable :: R(:)
-      double precision, allocatable :: kLeft(:) !!making kLeft and kRight allocatable
-      double precision, allocatable :: kRight(:)
+c      double precision, allocatable :: kLeft(:) !!making kLeft and kRight allocatable
+c      double precision, allocatable :: kRight(:)
       double precision, allocatable :: xPoints(:)
 
       logical, allocatable :: Select(:)
@@ -25,12 +25,15 @@ c     234567890
       double precision Tol,RChange
       double precision TotalMemory
       double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
-c      double precision kLeft, kRight
+      double precision kLeft, kRight
 
       double precision, allocatable :: LUFac(:,:),workl(:)
       double precision, allocatable :: workd(:),Residuals(:)
       double precision, allocatable :: xLeg(:),wLeg(:)
       double precision, allocatable :: u(:,:,:),uxx(:,:,:)
+      double precision, allocatable :: lu(:,:,:),luxx(:,:,:)  ! left point
+      double precision, allocatable :: cu(:,:,:),cuxx(:,:,:)  ! center point
+      double precision, allocatable :: ru(:,:,:),ruxx(:,:,:)  ! right point
       double precision, allocatable :: S(:,:),H(:,:)
       double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),
      >     Energies(:,:)
@@ -117,14 +120,11 @@ c     SET UP A LOG-GRID IN THE HYPERRADIUS
       StepX=(XLast-XFirst)/(RSteps-1.d0)
       
       allocate(R(RSteps))
-      allocate(kLeft(RSteps)) ! making array for kLeft and right because the bdry conditions are different at each R
-      allocate(kRight(RSteps))
+
       do i = 1,RSteps
 c     read(5,*) R(i)
 c     R(i)= (XFirst+(i-1)*StepX)**3
          R(i) = 10.d0**(XFirst+(i-1)*StepX)
-c         kLeft(i) = R(i)/rai
-c         kRight(i) = -kLeft(i)
       enddo
 
 c      if (mod(xNumPoints,2) .ne. 0) then
@@ -200,14 +200,10 @@ c     must move this block inside the loop over iR if the grid is adaptive
          xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
          xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
 
-c         kLeft = 1000.d0;
-c         kLeft = (R/Rbc**2)*sqrt(((1+mu**2)/mu)-(Rbc**2/R**2))*COTAN(-(1/Rbc)+phiai)
-c         kRight = -kLeft
-
          print*, 'iR = ', iR
-
-         kLeft(iR) = R(iR)/Rbc * sqrt(((1+mu**2)/mu)-(Rbc**2)/R(iR)**2)*COTAN(-(1/Rbc)+phiai) !But this Rbc is different from rbc
-         kRight(iR) = -kLeft(iR)
+         ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
+         kLeft = R(iR)/Rbc * sqrt(((1+mu**2)/mu)-(Rbc**2)/R(iR)**2)*COTAN(-(1/Rbc)+phiai) !But this Rbc is different from rbc
+         kRight = -kLeft
 
          if(xMax.le.xMin) then
             write(6,*) "minimum hyperradius too small."
@@ -217,9 +213,9 @@ c         kRight = -kLeft
          if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
 c each triade of R (+,-,0) will have a different physical set -- 
             print*, 'done... Calculating Basis functions'
-            call CalcBasisFuncsBP(Left,Right, kLeft(iR), kRight(iR), Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,0,u)
-            call CalcBasisFuncsBP(Left,Right, kLeft(iR), kRight(iR), Order,xPoints,LegPoints,xLeg,
+            call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,
      >           xDim,xBounds,xNumPoints,2,uxx)
 c two more calcbasisfuncs for kLeft +- delta R
 c ^^^ changed 'CalcBasisFuncs' to 'CalcBasisFuncsBP' here
