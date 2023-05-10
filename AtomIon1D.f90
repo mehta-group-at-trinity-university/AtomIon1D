@@ -16,6 +16,10 @@ contains
     allocate(u(LegPoints,xNumPoints,xDim),uxx(LegPoints,xNumPoints,xDim))    
   end subroutine AllocateBasisSet
 
+  !derived data type: set/basis <- have allocated arrays for XBounds
+  !<- XDim
+  !<- u, uxx (maybe just ux -- not a priority)
+
 end module BasisSets
 
 
@@ -53,7 +57,7 @@ program HHL1DHyperspherical
   double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
-  double precision sec,time,Rinitial,secp,timep,Rvalue, Rbc, C4,lho
+  double precision sec,time,Rinitial,secp,timep,Rvalue, rbc, C4,lho
   double precision hbar, phase2B, amu,omega,Rstar, dum
   character*64 LegendreFile
   common /Rvalue/ Rvalue      
@@ -94,7 +98,7 @@ program HHL1DHyperspherical
   Pi=dacos(-1.d0)
   write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
   mgamma = mu
-  phiai = datan(mgamma)     !same as Seths beta
+  phiai = datan(mgamma)     !same as Seths beta !!! arctan mu, d?atan
   write(6,*) "phiai = ", phiai
 
   !     read in grid information
@@ -106,10 +110,12 @@ program HHL1DHyperspherical
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(mu12*C4/hbar**2)/lho
   C4 = C4/(hbar*omega*lho**4)
-  Rbc = Rstar*sqrt(2d0)/((dble(Nbs) + 1d0)*Pi - phase2B)
+  !rbc = Rstar*sqrt(2d0)/((dble(Nbs) + 1d0)*Pi - phase2B)
+  rbc = 0.22 * Rstar
+  
   write(6,*) "C4 = ", C4
   write(6,*) "Rstar = ", Rstar
-  write(6,*) "Rbc = ", Rbc
+  write(6,*) "rbc = ", rbc
 
   ! Re-define in oscillator units
 
@@ -233,24 +239,24 @@ program HHL1DHyperspherical
      !     must move this block inside the loop over iR if the grid is adaptive
 
      print*, 'calling GridMaker'
-     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
-     xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
+     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR)) ! theta_bc -- only need to call gridmaker once for each value of 
+     xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
 
      print*, 'iR = ', iR
      ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
-     kLeft = R(iR)/Rbc * sqrt(((1+mu**2)/mu)-(Rbc**2)/R(iR)**2)*COTAN(-(1/Rbc)+phiai) !But this Rbc is different from rbc
+     kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
      kRight = -kLeft
 
      if(xMax.le.xMin) then
         write(6,*) "minimum hyperradius too small."
         stop
      endif
-     call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+     call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
      if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
         ! each triade of R (+,-,0) will have a different physical set -- 
         print*, 'done... Calculating Primitive Basis Functions'
-        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,pu)
-        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,puxx)
+        call CalcBasisFuncsBP(2,2, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,pu)
+        call CalcBasisFuncsBP(2,2, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,puxx)
         ! two more calcbasisfuncs for kLeft +- delta R
      endif
      print*, 'done... Calculating overlap matrix'
@@ -258,14 +264,13 @@ program HHL1DHyperspherical
      !----------------------------------------------------------------------------------------
      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,xNumPoints,pu,xBounds,HalfBandWidth,S)
 
-     if (CouplingFlag .ne. 0) then
-        ! Inside this IF block we must have:
-        ! 1) Construction of the physical basis set at the left and right point
-        ! 2) ???
 
 !******** CONSTRUCTION OF CENTER BASIS SETS ********
 
       write(6,*) 'Constructing Center Basis Set'
+
+      kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
+      kRight = -kLeft
 
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,cu)
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,cuxx)
@@ -280,11 +285,25 @@ program HHL1DHyperspherical
         call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,lPsi,rPsi)
         call CalcEigenErrors(info,iparam,MatrixDim,H,HalfBandWidth+1,S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
 
+
+     if (CouplingFlag .ne. 0) then
+        ! Inside this IF block we must have:
+        ! 1) Construction of the physical basis set at the left and right point
+        ! 2) ???
+
 !******** CONSTRUCTION OF LEFT BASIS SETS ********
 
       write(6,*) 'Constructing Left Basis Set'
 
       RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt < might be better
+
+      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft) ! theta_bc -- only need to call gridmaker once for each value of 
+      xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft)
+
+      kLeft = RLeft/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RLeft**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
+      kRight = -kLeft
+
+      !!Recompute kleft and kright at each triade
       
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,lu)
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,luxx)
@@ -302,6 +321,12 @@ program HHL1DHyperspherical
 
       RRight = 1.01d0*R(iR) !R(iR)+RDerivDelt
 
+      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RRight) ! theta_bc -- only need to call gridmaker once for each value of 
+      xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/RRight)
+
+      kLeft = RRight/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RRight**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
+      kRight = -kLeft
+
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,ru)
       call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,ruxx)
 
@@ -314,9 +339,9 @@ program HHL1DHyperspherical
 
      endif
 
-     write(6,*) 'Calculating Hamiltonian on primitive set with R = ', R(iR)
-     call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,LegPoints,&
-     xLeg,wLeg,xDim,xNumPoints,pu,puxx,xBounds,HalfBandWidth,H)
+!     write(6,*) 'Calculating Hamiltonian on primitive set with R = ', R(iR)
+!     call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,LegPoints,&
+!     xLeg,wLeg,xDim,xNumPoints,pu,puxx,xBounds,HalfBandWidth,H)
 
 !!     !write(6,*) 'Calling MyLargeDsband'
 !!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
@@ -760,11 +785,11 @@ subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints,Ca
   return
 end subroutine GridMakerHHL
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
   implicit none
   integer xNumPoints,CalcNewBasisFunc
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
-  double precision mu12,mu123,phiai,Rstar,Rbc
+  double precision mu12,mu123,phiai,Rstar,rbc
   integer i,j,k,OPGRID,NP
   double precision Pi
   double precision r0New

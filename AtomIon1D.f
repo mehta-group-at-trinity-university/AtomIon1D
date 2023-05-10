@@ -39,7 +39,7 @@ c      double precision, allocatable :: kRight(:)
      >     Energies(:,:)
       double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
       double precision ur(1:50000),acoef,bcoef,diff
-      double precision sec,time,Rinitial,secp,timep,Rvalue, Rbc, C4,lho
+      double precision sec,time,Rinitial,secp,timep,Rvalue, rbc, C4,lho
       double precision hbar, phase2B, amu,omega,Rstar, dum
       character*64 LegendreFile
       common /Rvalue/ Rvalue      
@@ -92,10 +92,13 @@ c     read in grid information
       lho = dsqrt(hbar/mi/omega)
       Rstar = dsqrt(mu12*C4/hbar**2)/lho
       C4 = C4/(hbar*omega*lho**4)
-      Rbc = Rstar*sqrt(2d0)/((dble(Nbs) + 1d0)*Pi - phase2B)
+      !rbc = Rstar*sqrt(2d0)/((dble(Nbs) + 1d0)*Pi - phase2B)
+
+      rbc = 0.22 * Rstar
+
       write(6,*) "C4 = ", C4
       write(6,*) "Rstar = ", Rstar
-      write(6,*) "Rbc = ", Rbc
+      write(6,*) "rbc = ", rbc
       
       ! Re-define in oscillator units
       
@@ -197,19 +200,19 @@ c-------------------------------------------------------------------------------
 c     must move this block inside the loop over iR if the grid is adaptive
          
          print*, 'calling GridMaker'
-         xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
-         xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* Rbc/R(iR))
+         xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
+         xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
 
          print*, 'iR = ', iR
          ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
-         kLeft = R(iR)/Rbc * sqrt(((1+mu**2)/mu)-(Rbc**2)/R(iR)**2)*COTAN(-(1/Rbc)+phiai) !But this Rbc is different from rbc
+         kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
          kRight = -kLeft
 
          if(xMax.le.xMin) then
             write(6,*) "minimum hyperradius too small."
             stop
          endif
-         call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+         call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
          if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
 c each triade of R (+,-,0) will have a different physical set -- 
             print*, 'done... Calculating Basis functions'
@@ -569,7 +572,7 @@ c     double precision TempPot,VInt,VTempInt
             rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))
 
 c this may be a good spot to write kLeft
-c         kLeft = (R/Rbc**2)*sqrt(((1+mu**2)/mu)-(Rbc**2/R**2))*COTAN(-(1/Rbc)+phiai)
+c         kLeft = (R/rbc**2)*sqrt(((1+mu**2)/mu)-(rbc**2/R**2))*COTAN(-(1/rbc)+phiai)
 c         kRight = -kLeft
 
             potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
@@ -789,11 +792,11 @@ c      write(96,15) (xPoints(k),k=1,xNumPoints)
       return
       end
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+      subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
       implicit none
       integer xNumPoints,CalcNewBasisFunc
       double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
-      double precision mu12,mu123,phiai,Rstar,Rbc
+      double precision mu12,mu123,phiai,Rstar,rbc
       integer i,j,k,OPGRID,NP
       double precision Pi
       double precision r0New
