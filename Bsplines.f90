@@ -1,10 +1,7 @@
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-
-      subroutine CalcBasisFuncsBP(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,
-     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      subroutine CalcBasisFuncsBP(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
       implicit none
-      integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
-     >     xNumPoints,Deriv
+      integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),xNumPoints,Deriv
       double precision xPoints(*),xLeg(*)
       double precision u(LegPoints,xNumPoints,MatrixDim)
       double precision xScale
@@ -99,8 +96,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
-     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+ MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
             enddo
          enddo
          Count = Count + 1
@@ -119,10 +115,10 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             Count = Count + 1
          enddo
       case(3)
-         constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))
-     >       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/
-     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - 
-     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
+         constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))&
+         - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/&
+         (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - &
+         MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
@@ -130,8 +126,8 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
-     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)/constLeft
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+&
+               MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)/constLeft
             enddo
          enddo
          Count = Count + 1
@@ -160,8 +156,8 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,
-     >              xNumPoints+Order-2,x)
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,&
+               xNumPoints+Order-2,x)
             enddo
          enddo
       case (1)
@@ -172,10 +168,10 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,
-     >              xNumPoints+Order-2,x)+
-     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,
-     >              xNumPoints+Order-1,x)
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,&
+               xNumPoints+Order-2,x)+&
+                MYBSpline(Order,Deriv,xNumPoints,xPoints,&
+                xNumPoints+Order-1,x)
             enddo
          enddo
       case(2)
@@ -193,10 +189,10 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             Count = Count + 1
          enddo
       case(3)
-         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) !!change
-     >        -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( 
-     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
-     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
+         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))& !!change
+         -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( &
+         MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight -&
+         MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
@@ -204,18 +200,18 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)/constRight+
-     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
+               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)/constRight+&
+               MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
             enddo
          enddo
       end select
 
       return
       end
-cc run with 0 0 and it should give results
-cc try 3 3 and large values for both <-- should give same spectrum as 0 0 too :)
-cc THEN: what do we actually use for hyperradius
-ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!cc run with 0 0 and it should give results
+!cc try 3 3 and large values for both <-- should give same spectrum as 0 0 too :)
+!cc THEN: what do we actually use for hyperradius
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
       subroutine CalcBasisFuncs(Left,Right,Order,xPoints,LegPoints,xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
 

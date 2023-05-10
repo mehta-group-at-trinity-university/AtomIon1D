@@ -3,7 +3,7 @@ module BasisSets
   double precision, allocatable :: lu(:,:,:),luxx(:,:,:)  ! left point
   double precision, allocatable :: cu(:,:,:),cuxx(:,:,:)  ! center point
   double precision, allocatable :: ru(:,:,:),ruxx(:,:,:)  ! right point
-  double precision, allocatable :: pu(:,:,:),puxx(:,:,:)  ! right point
+  double precision, allocatable :: pu(:,:,:),puxx(:,:,:)  ! primitive set
 
 contains
   subroutine AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,u,uxx)
@@ -17,6 +17,7 @@ contains
   end subroutine AllocateBasisSet
 
 end module BasisSets
+
 
 program HHL1DHyperspherical
   use BasisSets
@@ -47,7 +48,7 @@ program HHL1DHyperspherical
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
-  double precision, allocatable :: u(:,:,:),uxx(:,:,:)
+!  double precision, allocatable :: u(:,:,:),uxx(:,:,:)
   double precision, allocatable :: S(:,:),H(:,:)
   double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
@@ -175,16 +176,20 @@ program HHL1DHyperspherical
 
   allocate(xPoints(xNumPoints))
   allocate(xBounds(xNumPoints+2*Order))
+
+
+
   !  allocate(u(LegPoints,xNumPoints,xDim),uxx(LegPoints,xNumPoints,xDim))
-  call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,u,uxx)
-  call AllocateBasisSet(2,2,xNumPoints,LegPoints,Order,pu,puxx)
   !u(:,:,1) = alpha*pu(:,:,1) + pu(:,:,2)
- 
-  write(6,*) "Shape of u:"
-  write(6,*) shape(u)
-  write(6,*) "Shape of pu:"
-  write(6,*) shape(pu)
-  stop
+
+!   write(6,*) "Left and Right:"
+!   write(6,*) Left, Right
+!   write(6,*) "Shape of u:"
+!   write(6,*) shape(u)
+!   write(6,*) "Shape of pu:"
+!   write(6,*) shape(pu)
+!   stop
+
   allocate(S(HalfBandWidth+1,MatrixDim),H(HalfBandWidth+1,MatrixDim))
   allocate(P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates))
 
@@ -204,6 +209,18 @@ program HHL1DHyperspherical
   Tol=1e-20
 
   NumBound=0
+
+  call AllocateBasisSet(2,2,xNumPoints,LegPoints,Order,pu,puxx)
+
+  if (CouplingFlag .ne. 0) then
+
+   call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,lu,luxx)
+   call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,cu,cuxx)
+   call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,ru,ruxx)
+
+   write(6,*) 'Left, right, and center basis splines allocated.'
+
+  end if
 
   RChange=100.d0
   do iR = RSteps,1,-1!RSteps
@@ -231,86 +248,77 @@ program HHL1DHyperspherical
      call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),Rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
      if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
         ! each triade of R (+,-,0) will have a different physical set -- 
-        print*, 'done... Calculating Basis functions'
-        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,u)
-        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,uxx)
+        print*, 'done... Calculating Primitive Basis Functions'
+        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,pu)
+        call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,puxx)
         ! two more calcbasisfuncs for kLeft +- delta R
-        ! ^^^ changed 'CalcBasisFuncs' to 'CalcBasisFuncsBP' here
      endif
      print*, 'done... Calculating overlap matrix'
      !     must move this block inside the loop if the grid is adaptive
      !----------------------------------------------------------------------------------------
-     call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,xNumPoints,u,xBounds,HalfBandWidth,S)
+     call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,xNumPoints,pu,xBounds,HalfBandWidth,S)
 
      if (CouplingFlag .ne. 0) then
         ! Inside this IF block we must have:
         ! 1) Construction of the physical basis set at the left and right point
         ! 2) ???
-        RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt < might be better
-        write(6,*) 'Calculating Hamiltonian'
-        call CalcHamiltonian(alpha,RLeft,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,&
-             xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
-        !          write(6,*) 'Calling MyLargeDsband'
-        !     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,lPsi,
-        !     >           Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
-        call MyDsband(Select,Energies,lPsi,MatrixDim,Shift,MatrixDim, &
-             H,S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-             NumStates,Tol,Residuals,ncv,lPsi,MatrixDim,iparam,workd,workl,&
-             ncv*ncv+8*ncv,iwork,info)
-        if (iR .gt. 1) call FixPhase(NumStates,HalfBandWidth,&
-             MatrixDim,S,ncv,mPsi,lPsi)
-        call CalcEigenErrors(info,iparam,MatrixDim,H,&
-             HalfBandWidth+1,S,HalfBandWidth,NumStates,lPsi,Energies,ncv)
-        !     IF(R(iR).GT. 20.d0) Shift = 1.05d0*Energies(1,1)
-        !            IF(iR.GT.1) Shift = 1.05d0*Energies(1,1)
-        !     do i = 1,min(NumStates,iparam(5))
-        !     Energies(i,1) = Energies(i,1) + 1.875d0/(mu*RLeft*RLeft)
-        !     enddo
-        !     write(100,10) RLeft,(Energies(i,1), i = 1,NumStates)
-        !$$$            write(6,*)
-        !$$$            write(6,*) 'RLeft = ', RLeft
-        !$$$            do i = 1,min(NumStates,iparam(5))
-        !$$$               write(6,*) 'Energy(',i,') = ',Energies(i,1),'  Error = ', Energies(i,2)
-        !$$$            enddo
 
-        RRight = 1.01d0*R(iR) !R(iR)+RDerivDelt
-        call CalcHamiltonian(alpha,RRight,mu,mi,phiai,C4,L,Order,xPoints,&
-             LegPoints,xLeg,wLeg,xDim,&
-             xNumPoints,u,uxx,xBounds,&
-             HalfBandWidth,H)
+!******** CONSTRUCTION OF CENTER BASIS SETS ********
+
+      write(6,*) 'Constructing Center Basis Set'
+
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,cu)
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,cuxx)
+      
+        call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,&
+             LegPoints,xLeg,wLeg,xDim,xNumPoints,cu,cuxx,xBounds,HalfBandWidth,H)
         !            call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,rPsi,
         !     >           Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
         !            call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,NumStates,lPsi,rPsi)
+        call MyDsband(Select,Energies,rPsi,MatrixDim,Shift,MatrixDim,H,S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+             NumStates,Tol,Residuals,ncv,rPsi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+        call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,lPsi,rPsi)
+        call CalcEigenErrors(info,iparam,MatrixDim,H,HalfBandWidth+1,S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
 
-        call MyDsband(Select,Energies,rPsi,MatrixDim,Shift,MatrixDim,&
-             H,S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-             NumStates,Tol,&
-             Residuals,ncv,rPsi,MatrixDim,iparam,workd,workl,&
-             ncv*ncv+8*ncv,iwork,info)
-        call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,&
-             lPsi,rPsi)
-        call CalcEigenErrors(info,iparam,MatrixDim,H,&
-             HalfBandWidth+1,&
-             S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
-        !            IF(R(iR).GT.2.2d0) Shift = 0.93d0*Energies(1,1)
-        !     do i = 1,min(NumStates,iparam(5))
-        !     enddo
-        !     write(100,10) RRight,(Energies(i,1), i = 1,NumStates)
-!!$c$$$            write(6,*)
-!!$c$$$            write(6,*) 'RRight = ', RRight
-!!$c$$$            do i = 1,min(NumStates,iparam(5))
-!!$c$$$               write(6,*) 'Energy(',i,') = ',Energies(i,1),'  Error = ', Energies(i,2)
-!!$c$$$            enddo
+!******** CONSTRUCTION OF LEFT BASIS SETS ********
+
+      write(6,*) 'Constructing Left Basis Set'
+
+      RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt < might be better
+      
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,lu)
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,luxx)
+      
+        call CalcHamiltonian(alpha,RLeft,mu,mi,phiai,C4,L,Order,xPoints,&
+             LegPoints,xLeg,wLeg,xDim,xNumPoints,lu,luxx,xBounds,HalfBandWidth,H)
+        call MyDsband(Select,Energies,rPsi,MatrixDim,Shift,MatrixDim,H,S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+             NumStates,Tol,Residuals,ncv,rPsi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+        call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,lPsi,rPsi)
+        call CalcEigenErrors(info,iparam,MatrixDim,H,HalfBandWidth+1,S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
+
+!******** CONSTRUCTION OF RIGHT BASIS SETS ********
+
+      write(6,*) 'Constructing Right Basis Set'
+
+      RRight = 1.01d0*R(iR) !R(iR)+RDerivDelt
+
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,ru)
+      call CalcBasisFuncsBP(Left,Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,ruxx)
+
+         call CalcHamiltonian(alpha,RRight,mu,mi,phiai,C4,L,Order,xPoints,&
+             LegPoints,xLeg,wLeg,xDim,xNumPoints,ru,ruxx,xBounds,HalfBandWidth,H)
+        call MyDsband(Select,Energies,rPsi,MatrixDim,Shift,MatrixDim,H,S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+             NumStates,Tol,Residuals,ncv,rPsi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+        call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,lPsi,rPsi)
+        call CalcEigenErrors(info,iparam,MatrixDim,H,HalfBandWidth+1,S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
 
      endif
 
-     write(6,*) 'Calculating Hamiltonian with R = ', R(iR)
-     call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,&
-          LegPoints,xLeg,wLeg,xDim,&
-          xNumPoints,u,uxx,xBounds,&
-          HalfBandWidth,H)
+     write(6,*) 'Calculating Hamiltonian on primitive set with R = ', R(iR)
+     call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,LegPoints,&
+     xLeg,wLeg,xDim,xNumPoints,pu,puxx,xBounds,HalfBandWidth,H)
 
-     !write(6,*) 'Calling MyLargeDsband'
+!!     !write(6,*) 'Calling MyLargeDsband'
 !!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
 !!$c     >        Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
 !!$c     write(6,*) 'done...'
@@ -339,63 +347,16 @@ program HHL1DHyperspherical
         write(6,*) 'Energy(',i,') = ',Energies(i,1),'  Error = ', Energies(i,2)
      enddo
 
-!!$c$$$
-!!$c$$$         
-!!$c$$$c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!!$c$$$c     Adjusting Shift
+
+!    Adjusting Shift
      ur(iR) = Energies(1,1)
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
-     endif
-
-     !         if(ur(iR).lt.0d0) then
-     !            Shift = ur(iR)*1.5d0
-     !         endif
-!!$c$$$         if (iR.ge.2) then
-!!$c$$$            if ((R(iR+1).lt.Rchange).and.((ur(iR)-ur(iR-1)).gt.0.d0)) then
-!!$c$$$               Shift = dreal(Energies(1,1))
-!!$c$$$               if (dreal(Energies(1,1)).gt.0.d0) Shift = 0.1d0*Shift
-!!$c$$$               if (dreal(Energies(1,1)).lt.0.d0) Shift = 10.d0*Shift
-!!$c$$$            endif
-!!$c$$$            if (R(iR+1).gt.Rchange) then
-!!$c$$$c     First group of energies
-!!$c$$$               Shift = dreal(Energies(1,1))
-!!$c$$$               if (dreal(Energies(1,1)).gt.0.d0) then 
-!!$c$$$                  if (dreal(Energies(1,1)).lt.1.d-10) then
-!!$c$$$                     Shift = -1.d-9
-!!$c$$$                  else
-!!$c$$$                     Shift = -10.d0*Shift  
-!!$c$$$c     if (Shift.lt.1.d-10) Shift = -1.d-10
-!!$c$$$                  endif
-!!$c$$$               endif   
-!!$c$$$               if (dreal(Energies(1,1)).lt.0.d0) Shift = 10.d0*Shift
-!!$c$$$
-!!$c$$$c     if ((dreal(Energies(1,1)).lt.0.d0)) then
-!!$c$$$c     if ((R(iR).ge.300.d0).and.(ncount.le.10)) then
-!!$c$$$c     Shift = -1.d-9
-!!$c$$$c     ncount = ncount+1
-!!$c$$$c     else
-!!$c$$$c     Shift = 10.d0*Shift
-!!$c$$$c     endif
-!!$c$$$c     endif
-!!$c$$$               
-!!$c$$$c     Second group of energies
-!!$c$$$               Shift2 = dreal(Energies(NumBound+1,1))
-!!$c$$$               if (dreal(Energies(NumBound+1,1)).gt.0.d0) Shift2 = 0.01d0*Shift2
-!!$c$$$               if (dreal(Energies(NumBound+1,1)).lt.0.d0) Shift2 = 100.0d0*Shift2
-!!$c$$$               if (dreal(Shift2).le.dreal(Energies(NumBound,1))) Shift2 = dreal(Energies(NumBound,1))
-!!$c$$$            endif
-!!$c$$$         endif   
-!!$c$$$c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!!$c$$$         
-!!$c$$$         call cpu_time(timep)
-!!$c$$$         secp = timep 
-!!$c$$$         
+     endif         
 
      if (CouplingFlag .ne. 0) then
-        call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,&
-             RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
+        call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
 
         write(101,*) R(iR)
         write(102,*) R(iR)
@@ -432,7 +393,7 @@ program HHL1DHyperspherical
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
   deallocate(xBounds)
-  deallocate(u,uxx)
+!  deallocate(u,uxx)
 
   deallocate(R)
 
@@ -516,9 +477,7 @@ subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
   return
 end subroutine CalcOverlap
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,&
-     Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
-     xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
+subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
   implicit none
   double precision, external :: VSech
   integer Order,LegPoints,xDim,xNumPoints,xBounds(*),HalfBandWidth
@@ -557,6 +516,8 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,&
   m = -1.0d0/(2.0d0*mu*R*R)
   !      phiai = datan(mgamma)
   ! Could create an array x(LegPoints,xNumPoints) that specifies all of the integration abcissa.
+
+
   do kx = 1,xNumPoints-1
      ax = xPoints(kx)
      bx = xPoints(kx+1)
@@ -580,8 +541,7 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,&
   do kx = 1,xNumPoints-1
      do lx = 1,LegPoints
 
-        rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))
-
+        rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))))
 
         potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
         Pot(lx,kx) = alpha*potvalue
