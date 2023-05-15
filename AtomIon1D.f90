@@ -8,7 +8,6 @@ module BasisSets
    double precision, allocatable :: u(:,:,:), uxx(:,:,:)
    double precision, allocatable :: S(:,:)
    double precision, allocatable :: H(:,:)
-!   double precision, allocatable :: xPoints(:)
    integer, allocatable :: xBounds(:)
 
    END TYPE basis
@@ -23,7 +22,6 @@ contains
 
    TYPE(basis) T
    
-   !!!just put all of xDim initialization in here
    T%Left = Left
    T%Right = Right
     
@@ -35,7 +33,6 @@ contains
    allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
    allocate(T%xBounds(xNumPoints+2*Order))
    allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim))
-!   allocate(T%xPoints(T%xNumPoints))
 
    end subroutine AllocateBasis
 
@@ -50,7 +47,6 @@ contains
    deallocate(T%xBounds)
    deallocate(T%S)
    deallocate(T%H)
-!   deallocate(T%xPoints)
 
    end subroutine deAllocateBasis
 
@@ -66,7 +62,7 @@ program HHL1DHyperspherical
 
   integer LegPoints,xNumPoints
   integer NumStates,PsiFlag,Order,Left,Right
-  integer RSteps,CouplingFlag,CalcNewBasisFunc
+  integer RSteps,CouplingFlag
   double precision alpha,mass,Shift,Shift2,NumStateInc,mi,ma,phiai,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
@@ -81,18 +77,15 @@ program HHL1DHyperspherical
   integer LeadDim,MatrixDim,HalfBandWidth
   integer xDim, Nbs
   integer, allocatable :: iwork(:)
-!  integer, allocatable :: xBounds(:)
   double precision Tol,RChange
   double precision TotalMemory
   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
-!  double precision kLeft, kRight
   double precision RVal_L, RVal_R
 
 
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
-!  double precision, allocatable :: S(:,:),H(:,:)
   double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
@@ -197,8 +190,6 @@ program HHL1DHyperspherical
   call GetGaussFactors(LegendreFile,LegPoints,xLeg,wLeg)
 
   xDim = xNumPoints+Order-3
-!  if (Left .eq. 2) xDim = xDim + 1
-!  if (Right .eq. 2) xDim = xDim + 1
 
   MatrixDim = xDim
   HalfBandWidth = Order
@@ -236,68 +227,25 @@ program HHL1DHyperspherical
   allocate(Energies(ncv,2))
   info = 0
   iR=1
-  CalcNewBasisFunc=1
   Tol=1e-20
 
   NumBound=0
 
-  !! Allocating basis sets
-
-!   PB%Left = 2
-!   PB%Right = 2
-!   PB%xNumPoints = xNumPoints
-!   PB%xDim = xDim
-!   PB%LegPoints = LegPoints
-!   PB%Order = Order
-   
-!   call AllocateBasis(PB)
-
-!   CB%Left = Left
-!   CB%Right = Right
-!   CB%xNumPoints = xNumPoints
-!   CB%xDim = xDim
-!   CB%LegPoints = LegPoints
-!   CB%Order = Order
-
-!   call AllocateBasis(CB)
-
    call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints)
    call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints)
+
+   write(6,*) 'Allocated primitive and center basis splines.'
 
    write(6,*) 'SHAPE OF PB%S: ', shape(PB%S)
    write(6,*) 'SHAPE OF CB%S: ', shape(CB%S)
    write(6,*) 'SHAPE OF xPoints: ', shape(xPoints)
-!   write(6,*) 'SHAPE OF PB%xPoints: ', shape(PB%xPoints)
-!   write(6,*) 'SHAPE OF CB%xPoints: ', shape(CB%xPoints)
    write(6,*) 'SHAPE OF PB%u: ', shape(PB%u)
    write(6,*) 'SHAPE OF CB%u: ', shape(CB%u)
-
-   write(6,*) 'SHAPE OF mPsi: ', shape(mPsi)
-   write(6,*) 'SHAPE OF lPsi: ', shape(lPsi)
-   write(6,*) 'SHAPE OF rPsi: ', shape(rPsi)
 
   if (CouplingFlag .ne. 0) then
 
    call AllocateBasis(LB,Left,Right,Order, LegPoints, xNumPoints)
    call AllocateBasis(RB,Left,Right,Order, LegPoints, xNumPoints)
-
-   ! LB%Left = Left
-   ! LB%Right = Right
-   ! LB%xNumPoints = xNumPoints
-   ! LB%xDim = xDim
-   ! LB%LegPoints = LegPoints
-   ! LB%Order = Order
-
-   ! call AllocateBasis(LB)
-
-   ! RB%Left = Left
-   ! RB%Right = Right
-   ! RB%xNumPoints = xNumPoints
-   ! RB%xDim = xDim
-   ! RB%LegPoints = LegPoints
-   ! RB%Order = Order
-
-   ! call AllocateBasis(RB)
 
    write(6,*) 'Left, right basis splines allocated.'
 
@@ -314,8 +262,8 @@ program HHL1DHyperspherical
      !     must move this block inside the loop over iR if the grid is adaptive
 
      print*, 'calling GridMaker'
-     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR)) !correct units
-     xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
+     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR)*Rstar) ! NEW multiplied by RStar
+     xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR)*Rstar)
 
      print*, 'iR = ', iR
      ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
@@ -326,15 +274,12 @@ program HHL1DHyperspherical
         write(6,*) "minimum hyperradius too small."
         stop
      endif
-     call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
-     !if(CalcNewBasisFunc.eq.1) then
+     call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),rbc,xNumPoints,xMin,xMax,xPoints)
         print*, 'done... Calculating Primitive Basis Functions'
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u)
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx)
-
-     !endif
      print*, 'done... Calculating overlap matrix'
      !     must move this block inside the loop if the grid is adaptive
      !----------------------------------------------------------------------------------------
@@ -355,8 +300,6 @@ program HHL1DHyperspherical
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
 
       write(6,*) 'Center Basis Set Constructed.'
-
-      write(6,*) 'Using legpoints = ', LegPoints
       
         call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
@@ -367,12 +310,8 @@ program HHL1DHyperspherical
              NumStates,Tol,Residuals,ncv,mPsi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
         !call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,mPsi,mPsi) !
         call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,mPsi,Energies,ncv)
-!!!!!!!!!
 
      if (CouplingFlag .ne. 0) then
-        ! Inside this IF block we must have:
-        ! 1) Construction of the physical basis set at the left and right point
-        ! 2) ???
 
 !******** CONSTRUCTION OF LEFT BASIS SETS ********
 
@@ -383,10 +322,8 @@ program HHL1DHyperspherical
       xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft)
       xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft)
 
-      RVal_L = RLeft/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RLeft**2)*COTAN(-(1/rbc)+phiai)
-      RVal_R = -RVal_L
-
-      !!Recompute kleft and kright at each triade
+      RVal_L = RLeft/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RLeft**2)*COTAN(-(1/rbc)+phiai) !!Previously kLeft and kRight
+      RVal_R = -RVal_L 
       
       call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_L, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,0,LB%u)
       call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,2,LB%uxx)
@@ -795,9 +732,11 @@ subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,mPsi,rPsi)
 end subroutine FixPhase
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+!subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints)
   implicit none
-  integer xNumPoints,CalcNewBasisFunc
+!  integer xNumPoints,CalcNewBasisFunc
+  integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
   double precision mu12,mu123,phiai
   integer i,j,k,OPGRID
@@ -875,9 +814,10 @@ subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints,Ca
   return
 end subroutine GridMakerHHL
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,rbc,xNumPoints,xMin,xMax,xPoints)
   implicit none
-  integer xNumPoints,CalcNewBasisFunc
+!  integer xNumPoints,CalcNewBasisFunc
+   integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
   double precision mu12,mu123,phiai,Rstar,rbc
   integer i,j,k,OPGRID,NP
@@ -964,9 +904,9 @@ subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,rbc,xNumPoints,xMin,xMax,xPoints,Ca
   return
 end subroutine GridMakerIA
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
+subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
   implicit none
-  integer xNumPoints,CalcNewBasisFunc
+  integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
 
   integer i,j,k,OPGRID
