@@ -1,7 +1,7 @@
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ccccc new CalcBasisFuncsBP as of April 26, 2023 ccccc
-cc Declared kLeft and kRight in here; 
-      subroutine CalcBasisFuncsBP(Left,Right,kLeft, kRight, Order,xPoints,LegPoints,
+cc Declared kLeft (RVal_L) and kRight (RVal_R) in here; 
+      subroutine CalcBasisFuncsBP(Left,Right,RVal_L, RVal_R, Order,xPoints,LegPoints,
      >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
       implicit none
       integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
@@ -14,7 +14,7 @@ cc Declared kLeft and kRight in here;
       integer, allocatable :: t(:)
       double precision MyBSpline
       double precision x,ax,bx,xIntScale,xScaledZero
-      double precision kLeft,kRight,constLeft,constRight,lc1n,lc2n,rc1n,rc2n
+      double precision RVal_L,RVal_R,constLeft,constRight,lc1n,lc2n,rc1n,rc2n
 
       allocate(t(xNumPoints+2*Order))
 
@@ -120,10 +120,10 @@ cc Declared kLeft and kRight in here;
             Count = Count + 1
          enddo
       case(3)
-         constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))
-     >       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1))*kLeft)/
-     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))*kLeft - 
-     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1)))
+         constLeft = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))*RVal_L
+     >       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)))/
+     >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1)) - 
+     >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1))*RVal_L)
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
@@ -131,8 +131,10 @@ cc Declared kLeft and kRight in here;
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
-     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)/constLeft
+               u(l,k,Count) = constLeft*MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
+     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)
+!               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,1,x)+
+!     >                        MYBSpline(Order,Deriv,xNumPoints,xPoints,2,x)/constLeft
             enddo
          enddo
          Count = Count + 1
@@ -194,10 +196,10 @@ cc Declared kLeft and kRight in here;
             Count = Count + 1
          enddo
       case(3)
-         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)) !!change
-     >        -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*kRight) / ( 
-     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*kRight - 
-     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)))
+         constRight = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*RVal_R !!change
+     >        -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))) / ( 
+     >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)) - 
+     >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*RVal_R)
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
@@ -205,8 +207,10 @@ cc Declared kLeft and kRight in here;
             xScaledZero = 0.5d0*(bx+ax)
             do l = 1,LegPoints
                x = xScale*xLeg(l)+xScaledZero
-               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)/constRight+
-     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
+                  u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)+
+     >            constRight*MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
+!               u(l,k,Count) = MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-2,x)/constRight+
+!     >              MYBSpline(Order,Deriv,xNumPoints,xPoints,xNumPoints+Order-1,x)
             enddo
          enddo
       end select

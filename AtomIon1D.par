@@ -1,5 +1,5 @@
 Number of energies		  PsiFlag		    Coupling Matrix
-      80                          0                            0
+      80                          0                            1
 
 Legendre File
 Legendre.dat
@@ -8,7 +8,7 @@ Legendre Points
      10
 
  Shift		Shift2		Order    Left	Right 
--2000.0d0      -0.01d0        	5         0	 0
+-2000.0d0      -0.01d0        	5         3	 3
 
    alpha          mi          	      ma	         DD         L
   1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
