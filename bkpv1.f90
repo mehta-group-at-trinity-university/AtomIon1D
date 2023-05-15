@@ -1,18 +1,31 @@
 module BasisSets
   implicit none
+  double precision, allocatable :: lu(:,:,:),luxx(:,:,:)  ! left point
+  double precision, allocatable :: cu(:,:,:),cuxx(:,:,:)  ! center point
+  double precision, allocatable :: ru(:,:,:),ruxx(:,:,:)  ! right point
 
   TYPE basis
 
-   integer Left, Right, LegPoints, xDim, xNumPoints, Order
+   integer Left, Right, LegPoints, xDim, xNumPoints, Order !maybe exclude xNumPoints, LegPoints, ?
+   !(NOPE need LegPoints for allocating u and uxx, but can use LEGPOINTS for whole code)
    double precision, allocatable :: u(:,:,:), uxx(:,:,:)
-   double precision, allocatable :: S(:,:)
-   double precision, allocatable :: H(:,:)
-!   double precision, allocatable :: xPoints(:)
+   double precision, allocatable :: S(:,:) ! S matrix
+   double precision, allocatable :: H(:,:) ! H matrix
+   double precision, allocatable :: xPoints(:) ! H matrix
    integer, allocatable :: xBounds(:)
 
    END TYPE basis
 
 contains
+  subroutine AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,u,uxx)
+    implicit none
+    integer Left,Right,LegPoints,xNumPoints,Order,xDim
+    double precision, allocatable :: u(:,:,:),uxx(:,:,:)
+    xDim = xNumPoints+Order-3
+    if (Left .eq. 2) xDim = xDim + 1
+    if (Right .eq. 2) xDim = xDim + 1
+    allocate(u(LegPoints,xNumPoints,xDim),uxx(LegPoints,xNumPoints,xDim))    
+  end subroutine AllocateBasisSet
 
    subroutine AllocateBasis(T)
 
@@ -27,7 +40,7 @@ contains
    allocate(T%uxx(T%LegPoints,T%xNumPoints,T%xDim))
    allocate(T%xBounds(T%xNumPoints+2*T%Order))
    allocate(T%S(T%Order+1,T%xDim),T%H(T%Order+1,T%xDim))
-!   allocate(T%xPoints(T%xNumPoints))
+   allocate(T%xPoints(T%xNumPoints))
 
    end subroutine AllocateBasis
 
@@ -36,13 +49,16 @@ contains
    implicit none
 
    TYPE(basis) T
+    
+   !  if (T%Left .eq. 2) T%xDim = T%xDim + 1
+   !  if (T%Right .eq. 2) T%xDim = T%xDim + 1
 
    deallocate(T%u)
    deallocate(T%uxx)
    deallocate(T%xBounds)
    deallocate(T%S)
    deallocate(T%H)
-!   deallocate(T%xPoints)
+   deallocate(T%xPoints)
 
    end subroutine deAllocateBasis
 
@@ -55,6 +71,7 @@ program HHL1DHyperspherical
    TYPE(basis) CB
    TYPE(basis) LB
    TYPE(basis) RB
+
 
   integer LegPoints,xNumPoints
   integer NumStates,PsiFlag,Order,Left,Right
@@ -73,7 +90,7 @@ program HHL1DHyperspherical
   integer LeadDim,MatrixDim,HalfBandWidth
   integer xDim, Nbs
   integer, allocatable :: iwork(:)
-!  integer, allocatable :: xBounds(:)
+  integer, allocatable :: xBounds(:)
   double precision Tol,RChange
   double precision TotalMemory
   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
@@ -82,7 +99,7 @@ program HHL1DHyperspherical
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
-!  double precision, allocatable :: S(:,:),H(:,:)
+  double precision, allocatable :: S(:,:),H(:,:)
   double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
@@ -127,7 +144,7 @@ program HHL1DHyperspherical
   Pi=dacos(-1.d0)
   write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
   mgamma = mu
-  phiai = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
+  phiai = datan(mgamma)     !same as Seths beta !!! arctan mu, d?atan
   write(6,*) "phiai = ", phiai
 
   !     read in grid information
@@ -210,7 +227,7 @@ program HHL1DHyperspherical
   write(6,*)
 
   allocate(xPoints(xNumPoints))
-!  allocate(xBounds(xNumPoints+2*Order))
+  allocate(xBounds(xNumPoints+2*Order))
 
   allocate(P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates))
 
@@ -230,8 +247,6 @@ program HHL1DHyperspherical
   Tol=1e-20
 
   NumBound=0
-
-  !! Allocating basis sets
 
    PB%Left = 2
    PB%Right = 2
@@ -254,14 +269,19 @@ program HHL1DHyperspherical
    write(6,*) 'SHAPE OF PB%S: ', shape(PB%S)
    write(6,*) 'SHAPE OF CB%S: ', shape(CB%S)
    write(6,*) 'SHAPE OF xPoints: ', shape(xPoints)
-!   write(6,*) 'SHAPE OF PB%xPoints: ', shape(PB%xPoints)
-!   write(6,*) 'SHAPE OF CB%xPoints: ', shape(CB%xPoints)
+   write(6,*) 'SHAPE OF PB%xPoints: ', shape(PB%xPoints)
+   write(6,*) 'SHAPE OF CB%xPoints: ', shape(CB%xPoints)
    write(6,*) 'SHAPE OF PB%u: ', shape(PB%u)
    write(6,*) 'SHAPE OF CB%u: ', shape(CB%u)
    write(6,*) 'SHAPE OF PB%xNumPoints: ', PB%xNumPoints
    write(6,*) 'SHAPE OF CB%xNumPoints: ', CB%xNumPoints
 
+
+!  call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,cu,cuxx)
+
   if (CouplingFlag .ne. 0) then
+
+!   call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,lu,luxx)
 
    LB%Left = Left
    LB%Right = Right
@@ -271,6 +291,8 @@ program HHL1DHyperspherical
    LB%Order = Order
 
    call AllocateBasis(LB)
+
+!   call AllocateBasisSet(Left,Right,xNumPoints,LegPoints,Order,ru,ruxx)
 
    RB%Left = Left
    RB%Right = Right
@@ -296,12 +318,12 @@ program HHL1DHyperspherical
      !     must move this block inside the loop over iR if the grid is adaptive
 
      print*, 'calling GridMaker'
-     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
+     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR)) ! theta_bc -- only need to call gridmaker once for each value of 
      xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/R(iR))
 
      print*, 'iR = ', iR
      ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
-     kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai)
+     kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
      kRight = -kLeft
 
      if(xMax.le.xMin) then
@@ -309,8 +331,11 @@ program HHL1DHyperspherical
         stop
      endif
      call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),rbc,xNumPoints,xMin,xMax,xPoints,CalcNewBasisFunc)
-     if(CalcNewBasisFunc.eq.1) then
+     if(CalcNewBasisFunc.eq.1) then !!Call primitive basis calcs for the R(iR)
+        ! each triade of R (+,-,0) will have a different physical set -- 
         print*, 'done... Calculating Primitive Basis Functions'
+        !call CalcBasisFuncsBP(2,2, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,0,pu)
+        !call CalcBasisFuncsBP(2,2, kLeft, kRight, Order,xPoints,LegPoints,xLeg,xDim,xBounds,xNumPoints,2,puxx)
          call CalcBasisFuncsBP(PB%Left,PB%Right, kLeft, kRight, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u)
          call CalcBasisFuncsBP(PB%Left,PB%Right, kLeft, kRight, Order,xPoints,&
@@ -322,11 +347,18 @@ program HHL1DHyperspherical
      !----------------------------------------------------------------------------------------
      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,PB%xDim,xNumPoints,PB%u,PB%xBounds,HalfBandWidth,PB%S)
 
+      !write(6,*) 'Legpoints: ', xLeg
+      !write(6,*) 'PB%Legpoints: ', PB%xLeg
+
+      ! do i = 1, size(xPoints), 1
+      !    write(6,*) 'xPoints(',i,') = ', xPoints(i)
+      ! enddo
+      ! stop
 !******** CONSTRUCTION OF CENTER BASIS SETS ********
 !!!!!!!!!
       write(6,*) 'Constructing Center Basis Set'
 
-      kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai)
+      kLeft = R(iR)/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/R(iR)**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
       kRight = -kLeft
 
       call CalcBasisFuncsBP(CB%Left,CB%Right, kLeft, kRight, Order,&
@@ -334,7 +366,7 @@ program HHL1DHyperspherical
       call CalcBasisFuncsBP(CB%Left,CB%Right, kLeft, kRight, Order,&
       xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
 
-      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
+      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) !!!!! added this to get s matrices to work
 
       write(6,*) 'Center Basis Set Constructed.'
 
@@ -362,10 +394,10 @@ program HHL1DHyperspherical
 
       RLeft = 0.99d0*R(iR) !R(iR)-RDerivDelt < might be better
 
-      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft)
+      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft) ! theta_bc -- only need to call gridmaker once for each value of 
       xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/RLeft)
 
-      kLeft = RLeft/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RLeft**2)*COTAN(-(1/rbc)+phiai)
+      kLeft = RLeft/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RLeft**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
       kRight = -kLeft
 
       !!Recompute kleft and kright at each triade
@@ -386,12 +418,12 @@ program HHL1DHyperspherical
 
       write(6,*) 'Constructing Right Basis Set'
 
-      RRight = 1.01d0*R(iR)
+      RRight = 1.01d0*R(iR) !R(iR)+RDerivDelt
 
-      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RRight)
+      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* rbc/RRight) ! theta_bc -- only need to call gridmaker once for each value of 
       xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* rbc/RRight)
 
-      kLeft = RRight/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RRight**2)*COTAN(-(1/rbc)+phiai)
+      kLeft = RRight/rbc * sqrt(((1+mu**2)/mu)-(rbc**2)/RRight**2)*COTAN(-(1/rbc)+phiai) !But this rbc is different from rbc
       kRight = -kLeft
 
       call CalcBasisFuncsBP(RB%Left,RB%Right, kLeft, kRight, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u)
@@ -407,6 +439,10 @@ program HHL1DHyperspherical
         call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,rPsi,Energies,ncv)
 
      endif
+
+!     write(6,*) 'Calculating Hamiltonian on primitive set with R = ', R(iR)
+!     call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,LegPoints,&
+!     xLeg,wLeg,xDim,xNumPoints,pu,puxx,xBounds,HalfBandWidth,H)
 
 !!     !write(6,*) 'Calling MyLargeDsband'
 !!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
@@ -447,7 +483,6 @@ program HHL1DHyperspherical
         Shift = ur(iR)*10d0
      endif         
 
-!!TODO: COUPLING MATRICES
    !   if (CouplingFlag .ne. 0) then
    !      call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP) !!!FIX THIS
 
@@ -485,12 +520,9 @@ program HHL1DHyperspherical
   deallocate(P,Q,dP)
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
-!  deallocate(xBounds)
-  call deAllocateBasis(PB)
-  call deAllocateBasis(CB)
-  call deAllocateBasis(LB)
-  call deAllocateBasis(RB)
+  deallocate(xBounds)
 !  deallocate(u,uxx)
+
   deallocate(R)
 
 10 format(1P,100e25.15)
