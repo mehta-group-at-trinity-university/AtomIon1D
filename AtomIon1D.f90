@@ -99,7 +99,7 @@ program HHL1DHyperspherical
 !  double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
-  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb,sbc, C4,lho
+  double precision sec,time,Rinitial,secp,timep,Rvalue, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum
   character*64 LegendreFile
   common /Rvalue/ Rvalue      
@@ -152,11 +152,12 @@ program HHL1DHyperspherical
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
   C4 = C4/(hbar*omega*lho**4)
-  sNb = 1.d0/(-dble(Nbs)*Pi + phi) !sbc is sbc from new notes
+  phi = COTAN(1/phi) ! Reverses small-angle approximation, if necessary
+  sbc = 1.d0/(-dble(Nbs)*Pi + phi) !sbc is sbc from new notes
   
   write(6,*) "C4 = ", C4
   write(6,*) "Rstar = ", Rstar
-  write(6,*) "sNb = ", sNb
+  write(6,*) "sbc = ", sbc
 
   ! Re-define in oscillator units
 
@@ -231,9 +232,7 @@ program HHL1DHyperspherical
   allocate(LUFac(LeadDim,MatrixDim))
   allocate(workl(ncv*ncv+8*ncv))
   allocate(workd(3*MatrixDim))
-!  allocate(lPsi(MatrixDim,ncv),mPsi(MatrixDim,ncv),rPsi(MatrixDim,ncv))
   allocate(Residuals(MatrixDim))
-!  allocate(Energies(ncv,2))
   info = 0
   iR=1
   Tol=1e-20
@@ -248,7 +247,6 @@ program HHL1DHyperspherical
    write(6,*) 'SHAPE OF xPoints: ', shape(xPoints)
    write(6,*) 'SHAPE OF PB%u: ', shape(PB%u)
    write(6,*) 'SHAPE OF CB%u: ', shape(CB%u)
-
    write(6,*) 'SHAPE OF CB%Psi: ', shape(CB%Psi)
 
   if (CouplingFlag .ne. 0) then
@@ -270,23 +268,20 @@ program HHL1DHyperspherical
      !c----------------------------------------------------------------------------------------
      !     must move this block inside the loop over iR if the grid is adaptive
 
-      phi = COTAN(1/phi) ! Reverses small-angle approximation
-      sNb = 1.d0/(-dble(Nbs)*Pi + phi)
+      print*, 'Beginning iteration at iR = ', iR
 
-      !sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-theta_c)
+      sbc = 1.d0/(-dble(Nbs)*Pi + phi)
 
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
       
-      write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
-      print*, 'calling GridMaker'
+      !write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
+      
+      print*, 'calling GridMaker.'
+      print*, 'Using xMin = ', xMin
+      print*, 'Using xMax = ', xMax
 
-     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft
-     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
-
-     print*, 'iR,xMin,xMax = ', iR, xMin,xMax
-     ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
-     !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*R(iR)))**2)*COTAN(-(1/sbc)+theta_c)) ! Updated based on new notes
-     !RVal_R = -RVal_L
+     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sbc/RLeft*(Rstar/lho)) ! Now based on RLeft
+     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sbc/RLeft*(Rstar/lho)) ! ''
 
      if(xMax.le.xMin) then
         write(6,*) "minimum hyperradius too small."
@@ -305,16 +300,14 @@ program HHL1DHyperspherical
 
 !******** CONSTRUCTION OF CENTER BASIS SETS ********
 !!!!!!!!!
-      write(6,*) 'Constructing Center Basis Set'
+      write(6,*) 'Constructing center basis set.'
 
-      !sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-theta_c)
-
-      YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*R(iR)))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
-      !YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc)*COTAN(-(1/sbc)+phi))
+      YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
       RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
-     write(6,*) '****using RVal_L (center)) = ', RVal_L
+     write(6,*) 'Center Basis YVal_L = ', YVal_L
+     write(6,*) 'Center Basis RVal_L = ', RVal_L
 
       call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
       xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
@@ -324,8 +317,6 @@ program HHL1DHyperspherical
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
 
       write(6,*) 'Center Basis Set Constructed.'
-
-      write(6,*) 'Using legpoints = ', LegPoints
       
         call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
@@ -345,15 +336,16 @@ program HHL1DHyperspherical
 
 !******** CONSTRUCTION OF LEFT BASIS SETS ********
 
-      write(6,*) 'Constructing Left Basis Set'
+      write(6,*) 'Constructing left basis set.'
 
-      RLeft = R(iR)-RDerivDelt
+      RLeft = R(iR)-RDerivDelt ! This is just for reference, as RLeft is already declared in this loop
 
-      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RLeft))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*RLeft))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
       RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
-      write(6,*) '****using RVal_L (RLeft) = ', RVal_L
+      write(6,*) 'Left Basis YVal_L = ', YVal_L
+      write(6,*) 'Left basis RVal_L = ', RVal_L
 
       !!Recompute kleft and kright at each triade
       
@@ -371,18 +363,16 @@ program HHL1DHyperspherical
 
 !******** CONSTRUCTION OF RIGHT BASIS SETS ********
 
-      write(6,*) 'Constructing Right Basis Set'
+      write(6,*) 'Constructing right basis set.'
 
       RRight =  R(iR)+RDerivDelt
 
-      !YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RRight))**2) * ((1/sNb)+(1/sNb)*COTAN(-(1/sNb)+phi))
-      YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RRight))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+      YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*RRight))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
       RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
-     write(6,*) '****using RVal_L (RRight) = ', RVal_L
-
-     !stop
+     write(6,*) 'Right Basis YVal_L = ', YVal_L
+     write(6,*) 'Right basis RVal_L = ', RVal_L
 
       call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u)
       call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,2,RB%uxx)
@@ -423,7 +413,6 @@ program HHL1DHyperspherical
      write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
      write(200,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
      write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
