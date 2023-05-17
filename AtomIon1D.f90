@@ -73,7 +73,7 @@ program HHL1DHyperspherical
   integer LegPoints,xNumPoints
   integer NumStates,PsiFlag,Order,Left,Right
   integer RSteps,CouplingFlag
-  double precision alpha,mass,Shift,Shift2,NumStateInc,mi,ma,phiai,mgamma
+  double precision alpha,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
   double precision xMin,xMax
@@ -90,7 +90,7 @@ program HHL1DHyperspherical
   double precision Tol,RChange
   double precision TotalMemory
   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
-  double precision RVal_L, RVal_R
+  double precision YVal_L,RVal_L, RVal_R
 
 
   double precision, allocatable :: LUFac(:,:),workl(:)
@@ -100,7 +100,7 @@ program HHL1DHyperspherical
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb,sbc, C4,lho
-  double precision hbar, phase2B, amu,omega,Rstar, dum
+  double precision hbar, phi, amu,omega,Rstar, dum
   character*64 LegendreFile
   common /Rvalue/ Rvalue      
   hbar = 1.054571817d-34
@@ -140,19 +140,19 @@ program HHL1DHyperspherical
   Pi=dacos(-1.d0)
   write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
   mgamma = mu
-  phiai = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
-  write(6,*) "phiai = ", phiai
+  theta_c = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
+  write(6,*) "theta_c = ", theta_c
 
   !     read in grid information
   read(5,*)
   read(5,*)
-  read(5,*) xNumPoints, omega, Nbs, C4, phase2B
-  write(6,*) xNumPoints, omega, Nbs, C4, phase2B
+  read(5,*) xNumPoints, omega, Nbs, C4, phi
+  write(6,*) xNumPoints, omega, Nbs, C4, phi
   omega = 2d0*Pi*omega
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
   C4 = C4/(hbar*omega*lho**4)
-  sNb = 1.d0/(-dble(Nbs)*Pi + phase2B) !sbc is sbc from new notes
+  sNb = 1.d0/(-dble(Nbs)*Pi + phi) !sbc is sbc from new notes
   
   write(6,*) "C4 = ", C4
   write(6,*) "Rstar = ", Rstar
@@ -270,29 +270,29 @@ program HHL1DHyperspherical
      !c----------------------------------------------------------------------------------------
      !     must move this block inside the loop over iR if the grid is adaptive
 
-      !sNB = 1.d0/(-dble(Nbs)*Pi + COTAN(1/phase2B)) ! good
-      sNB = 1.d0/(-dble(Nbs)*Pi + phase2B)
+      phi = COTAN(1/phi) ! Reverses small-angle approximation
+      sNb = 1.d0/(-dble(Nbs)*Pi + phi)
 
-      sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-phiai)
+      !sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-theta_c)
 
-      !RLeft = R(iR)-RDerivDelt
+      RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
       
-      write(6,*) 'Testing value of dble(Nbs)*Pi - phase2B: ', dble(Nbs)*Pi - phase2B
+      write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
       print*, 'calling GridMaker'
 
-     xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* sNB/R(iR)*(Rstar/lho)) ! Now based on RLeft
-     xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* sNB/R(iR)*(Rstar/lho)) ! ''
+     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft
+     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
 
      print*, 'iR,xMin,xMax = ', iR, xMin,xMax
      ! Double check the scaling of R to be consistent with oscillator units in this boundary condition.
-     !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*R(iR)))**2)*COTAN(-(1/sbc)+phiai)) ! Updated based on new notes
+     !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*R(iR)))**2)*COTAN(-(1/sbc)+theta_c)) ! Updated based on new notes
      !RVal_R = -RVal_L
 
      if(xMax.le.xMin) then
         write(6,*) "minimum hyperradius too small."
         stop
      endif
-     call GridMakerIA(mu,mu12,phiai,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
+     call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
         print*, 'done... Calculating Primitive Basis Functions'
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u)
@@ -307,22 +307,14 @@ program HHL1DHyperspherical
 !!!!!!!!!
       write(6,*) 'Constructing Center Basis Set'
 
-      sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-phiai)
+      !sbc = (lho/Rstar)*R(iR)*dsqrt(1d0+mu**2/(mu))*SIN(xMin-theta_c)
 
-      xMin = phiai + asin(dsqrt(mu/(1d0+mu**2))* sNB/R(iR)*(Rstar/lho)) ! Now based on RLeft
-      xMax = Pi + phiai - asin(dsqrt(mu/(1d0+mu**2))* sNB/R(iR)*(Rstar/lho)) ! ''
-
-      !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*R(iR)))**2)*COTAN(-(1/sbc)+phiai)) ! Updated based on new notes
-      !RVal_R = -RVal_L
-
-      !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*R(iR)))**2)*COTAN(-(1/sbc)+phiai)) ! Updated based on new notes
-      RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((Rstar*sbc)/(lho*R(iR)))**2)*(1/sbc)*(1+(1/sbc)*COTAN(-(1/sbc)+phase2B))) ! Updated based on new notes
-      !RVal_L = 1.d0/(R(iR) * sqrt(((1+mu**2)/mu)-((Rstar*sbc)/(lho*R(iR)))**2)*(1/sbc)*(1+(1/sbc)*COTAN(-(1/sbc)+COTAN(1/phase2B))))
+      YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*R(iR)))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+      !YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc)*COTAN(-(1/sbc)+phi))
+      RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
      write(6,*) '****using RVal_L (center)) = ', RVal_L
-
-     stop
 
       call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
       xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
@@ -335,7 +327,7 @@ program HHL1DHyperspherical
 
       write(6,*) 'Using legpoints = ', LegPoints
       
-        call CalcHamiltonian(alpha,R(iR),mu,mi,phiai,C4,L,Order,xPoints,&
+        call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
         !            call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,rPsi,
         !     >           Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
@@ -355,18 +347,13 @@ program HHL1DHyperspherical
 
       write(6,*) 'Constructing Left Basis Set'
 
-      !RLeft = R(iR)-RDerivDelt
+      RLeft = R(iR)-RDerivDelt
 
-      RLeft = R(iR)
-
-      sbc = (lho/Rstar)*RLeft*dsqrt(1d0+mu**2/(mu))*SIN(xMin-phiai)
-
-      RVal_L = 1.d0/(RLeft * sqrt(((1+mu**2)/mu)-((lho*sNB)/(Rstar*RLeft))**2)*COTAN(-(1/sNB)+phiai)) ! Updated based on new notes
+      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RLeft))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+      RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
       write(6,*) '****using RVal_L (RLeft) = ', RVal_L
-
-      stop
 
       !!Recompute kleft and kright at each triade
       
@@ -375,7 +362,7 @@ program HHL1DHyperspherical
       
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%xBounds,HalfBandWidth,LB%S)
 
-        call CalcHamiltonian(alpha,RLeft,mu,mi,phiai,C4,L,Order,xPoints,&
+        call CalcHamiltonian(alpha,RLeft,mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%uxx,LB%xBounds,HalfBandWidth,LB%H)
         call MyDsband(Select,LB%Energies,LB%Psi,MatrixDim,Shift,MatrixDim,LB%H,LB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
              NumStates,Tol,Residuals,ncv,LB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
@@ -388,19 +375,21 @@ program HHL1DHyperspherical
 
       RRight =  R(iR)+RDerivDelt
 
-      sbc = (lho/Rstar)*RRight*dsqrt(1d0+mu**2/(mu))*SIN(xMin-phiai)
-
-      RVal_L = 1.d0/(RRight * sqrt(((1+mu**2)/mu)-((lho*sbc)/(Rstar*RRight))**2)*COTAN(-(1/sbc)+phiai)) ! Updated based on new notes
+      !YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RRight))**2) * ((1/sNb)+(1/sNb)*COTAN(-(1/sNb)+phi))
+      YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RRight))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+      RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
      write(6,*) '****using RVal_L (RRight) = ', RVal_L
+
+     !stop
 
       call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u)
       call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,2,RB%uxx)
 
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%xBounds,HalfBandWidth,RB%S)
 
-         call CalcHamiltonian(alpha,RRight,mu,mi,phiai,C4,L,Order,xPoints,&
+         call CalcHamiltonian(alpha,RRight,mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%uxx,RB%xBounds,HalfBandWidth,RB%H)
         call MyDsband(Select,RB%Energies,RB%Psi,MatrixDim,Shift,MatrixDim,RB%H,RB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
              NumStates,Tol,Residuals,ncv,RB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
@@ -578,11 +567,12 @@ subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
   return
 end subroutine CalcOverlap
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
+subroutine CalcHamiltonian(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
+xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
   implicit none
   double precision, external :: VSech
   integer Order,LegPoints,xDim,xNumPoints,xBounds(*),HalfBandWidth
-  double precision alpha,R,mu,mgamma,phiai,C4,L,mi
+  double precision alpha,R,mu,mgamma,theta_c,C4,L,mi
   double precision xPoints(*),xLeg(*),wLeg(*)
   double precision H(HalfBandWidth+1,xDim)
   double precision u(LegPoints,xNumPoints,xDim),uxx(LegPoints,xNumPoints,xDim)
@@ -605,7 +595,7 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,xLeg
   double precision mu12,r0diatom,dDiatom
 
 
-  mgamma=dtan(phiai)
+  mgamma=dtan(theta_c)
   allocate(xIntScale(xNumPoints),xT(xDim,xDim),xV(xDim,xDim))
   allocate(cosx(LegPoints,xNumPoints),sinx(LegPoints,xNumPoints))
   allocate(sinai(LegPoints,xNumPoints))
@@ -615,7 +605,7 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,xLeg
   Pi = 3.1415926535897932385d0
 
   m = -1.0d0/(2.0d0*mu*R*R)
-  !      phiai = datan(mgamma)
+  !      theta_c = datan(mgamma)
   ! Could create an array x(LegPoints,xNumPoints) that specifies all of the integration abcissa.
 
 
@@ -627,7 +617,7 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,phiai,C4,L,Order,xPoints,LegPoints,xLeg
      do lx = 1,LegPoints
         x = xIntScale(kx)*xLeg(lx)+xScaledZero
         cosx(lx,kx) = dcos(x)
-        sinai(lx,kx) = dsin(phiai-x)
+        sinai(lx,kx) = dsin(theta_c-x)
         sinx(lx,kx) = dsin(x)
      enddo
   enddo
@@ -781,11 +771,11 @@ subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,mPsi,rPsi)
 end subroutine FixPhase
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints)
+subroutine GridMakerHHL(mu,mu12,mu123,theta_c,R,r0,xNumPoints,xMin,xMax,xPoints)
   implicit none
   integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
-  double precision mu12,mu123,phiai
+  double precision mu12,mu123,theta_c
   integer i,j,k,OPGRID
   double precision Pi
   double precision r0New
@@ -803,8 +793,8 @@ subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints)
   if((OPGRID.eq.1).and.(R.gt.xRswitch)) then
      print*, 'R>xRswitch!! using modified grid!!'
      x0 = xMin
-     x1 = phiai - deltax  
-     x2 = phiai + deltax
+     x1 = theta_c - deltax  
+     x2 = theta_c + deltax
      x3 = xMax-deltax
      x4 = xMax
      k = 1
@@ -861,11 +851,11 @@ subroutine GridMakerHHL(mu,mu12,mu123,phiai,R,r0,xNumPoints,xMin,xMax,xPoints)
   return
 end subroutine GridMakerHHL
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerIA(mu,mu12,phiai,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
+subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   implicit none
   integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
-  double precision mu12,mu123,phiai,Rstar,sbc
+  double precision mu12,mu123,theta_c,Rstar,sbc
   integer i,j,k,OPGRID,NP
   double precision Pi
   double precision r0New
@@ -1255,7 +1245,7 @@ end subroutine CalcEigenErrors
 !!$c$$$      return
 !!$c$$$      end
 !!$c$$$
-!!$c$$$      subroutine printVAIHO(phiai,mu,mi,ma)
+!!$c$$$      subroutine printVAIHO(theta_c,mu,mi,ma)
 !!$c$$$      implicit none
 !!$c$$$      double precision, external :: VAIHO
 !!$c$$$      integer i,j,N
