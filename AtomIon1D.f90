@@ -99,7 +99,7 @@ program HHL1DHyperspherical
 !  double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
   double precision ur(1:50000),acoef,bcoef,diff
-  double precision sec,time,Rinitial,secp,timep,Rvalue, sbc, C4,lho
+  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum
   character*64 LegendreFile
   common /Rvalue/ Rvalue      
@@ -152,12 +152,13 @@ program HHL1DHyperspherical
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
   C4 = C4/(hbar*omega*lho**4)
-  phi = COTAN(1/phi) ! Reverses small-angle approximation, if necessary
-  sbc = 1.d0/(-dble(Nbs)*Pi + phi) !sbc is sbc from new notes
+  !phi = COTAN(1/phi) ! Reverses small-angle approximation, if necessary
+  !sNb = 1.d0/(-dble(Nbs)*Pi + phi) !sNb is sNb from new notes
+  sNb = 1.d0/(dble(Nbs)*Pi + phi) !sNb is sNb from new notes
   
   write(6,*) "C4 = ", C4
   write(6,*) "Rstar = ", Rstar
-  write(6,*) "sbc = ", sbc
+  write(6,*) "sNb = ", sNb
 
   ! Re-define in oscillator units
 
@@ -170,6 +171,13 @@ program HHL1DHyperspherical
   read(5,*)
   read(5,*) RSteps,RDerivDelt,RFirst,RLast
   write(6,*) RSteps,RDerivDelt,RFirst,RLast
+
+
+  write(6,*) "Resetting RFirst from: ", RFirst
+
+  RFirst = dsqrt(mu/(1+mu**2))*(RStar/(lho*(Nbs*Pi+phi)))+2*RDerivDelt
+
+  write(6,*) "to: ", RFirst
 
   !     c   XFirst=dsqrt(RFirst)
   !     c   XLast=dsqrt(RLast)
@@ -270,18 +278,39 @@ program HHL1DHyperspherical
 
       print*, 'Beginning iteration at iR = ', iR
 
-      sbc = 1.d0/(-dble(Nbs)*Pi + phi)
+      !sNb = 1.d0/(dble(Nbs)*Pi + phi)
 
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
       
       !write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
       
       print*, 'calling GridMaker.'
-      print*, 'Using xMin = ', xMin
-      print*, 'Using xMax = ', xMax
 
-     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sbc/RLeft*(Rstar/lho)) ! Now based on RLeft
-     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sbc/RLeft*(Rstar/lho)) ! ''
+      !xMin = theta_c + dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! Now using small-angle approximation
+      !xMax = Pi + theta_c - dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! ''
+
+      if (CouplingFlag .eq. 0) then
+     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
+     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) ! ''
+      endif
+
+      if (CouplingFlag .eq. 1) then
+     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft and fixed sNb.
+     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
+      endif
+
+     print*, 'Using xMin = ', xMin
+     print*, 'Using xMax = ', xMax
+
+   !   print*, 'dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) = ', dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)
+
+   !    sbc = (sNb/RLeft)*R(iR)
+
+   !    print*, 'sbc using sbc = (sNb/RLeft)*R(iR):', sbc
+
+      sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c)
+
+      print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
 
      if(xMax.le.xMin) then
         write(6,*) "minimum hyperradius too small."
@@ -340,7 +369,7 @@ program HHL1DHyperspherical
 
       RLeft = R(iR)-RDerivDelt ! This is just for reference, as RLeft is already declared in this loop
 
-      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*RLeft))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
+      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RLeft))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
       RVal_L = 1.d0/YVal_L
       RVal_R = -RVal_L
 
@@ -410,9 +439,9 @@ program HHL1DHyperspherical
    !        HalfBandWidth,NumStates,mPsi,Energies,ncv)
 
      write(6,*) 'writing the energies'
-     write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+     if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
      write(200,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+     if (CouplingFlag .eq. 1) write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -471,8 +500,8 @@ program HHL1DHyperspherical
 
   call deAllocateBasis(PB)
   call deAllocateBasis(CB)
-  call deAllocateBasis(LB)
-  call deAllocateBasis(RB)
+  if (CouplingFlag .ne. 0) call deAllocateBasis(LB)
+  if (CouplingFlag .ne. 0) call deAllocateBasis(RB)
   
   deallocate(R)
 
