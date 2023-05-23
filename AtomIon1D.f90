@@ -9,6 +9,8 @@ module BasisSets
    double precision, allocatable :: S(:,:)
    double precision, allocatable :: H(:,:)
    double precision, allocatable :: Psi(:,:),Energies(:,:)
+   double precision alpha, beta
+   !double precision, allocatable :: alphas(:),betas(:)
    
    integer, allocatable :: xBounds(:)
 
@@ -42,6 +44,8 @@ contains
    allocate(T%Psi(MatrixDim,ncv))
    allocate(T%Energies(ncv,2))
 
+   !allocate(T%alphas(RSteps), T%betas(RSteps)) !!new
+
    end subroutine AllocateBasis
 
    subroutine deAllocateBasis(T)
@@ -73,7 +77,7 @@ program HHL1DHyperspherical
   integer LegPoints,xNumPoints
   integer NumStates,PsiFlag,Order,Left,Right
   integer RSteps,CouplingFlag
-  double precision alpha,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
+  double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
   double precision xMin,xMax
@@ -317,9 +321,9 @@ program HHL1DHyperspherical
      call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
         print*, 'done... Calculating Primitive Basis Functions'
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
-         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u)
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta)
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
-         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx)
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx, tmp_alpha, tmp_beta)
      print*, 'done... Calculating overlap matrix'
      !     must move this block inside the loop if the grid is adaptive
      !----------------------------------------------------------------------------------------
@@ -337,9 +341,13 @@ program HHL1DHyperspherical
      write(6,*) 'Center Basis RVal_L = ', RVal_L
 
       call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
+      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta)
+         write(6,*) 'CB%alpha (u) = ', CB%alpha
+         write(6,*) 'CB%beta (u) = ', CB%beta
       call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
+      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx, CB%alpha, CB%beta)
+         write(6,*) 'CB%alpha (uxx) = ', CB%alpha
+         write(6,*) 'CB%beta (uxx) = ', CB%beta
 
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
 
@@ -376,8 +384,14 @@ program HHL1DHyperspherical
 
       !!Recompute kleft and kright at each triade
       
-      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_L, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,0,LB%u)
-      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,2,LB%uxx)
+      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_L, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,0,LB%u,&
+       LB%alpha, LB%beta)
+         write(6,*) 'LB%alpha (u) = ', LB%alpha
+         write(6,*) 'LB%beta (u) = ', LB%beta
+      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,2,LB%uxx,&
+       LB%alpha, LB%beta)
+         write(6,*) 'LB%alpha (uxx) = ', LB%alpha
+         write(6,*) 'LB%beta (uxx) = ', LB%beta
       
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%xBounds,HalfBandWidth,LB%S)
 
@@ -401,8 +415,14 @@ program HHL1DHyperspherical
      write(6,*) 'Right Basis YVal_L = ', YVal_L
      write(6,*) 'Right basis RVal_L = ', RVal_L
 
-      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u)
-      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,2,RB%uxx)
+      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u,&
+      RB%alpha, RB%beta)
+         write(6,*) 'RB%alpha (u) = ', RB%alpha
+         write(6,*) 'RB%beta (u) = ', RB%beta
+      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,2,RB%uxx,&
+      RB%alpha, RB%beta)
+         write(6,*) 'RB%alpha (uxx) = ', RB%alpha
+         write(6,*) 'RB%beta (uxx) = ', RB%beta
 
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%xBounds,HalfBandWidth,RB%S)
 
@@ -457,6 +477,11 @@ program HHL1DHyperspherical
      endif         
 
 !!TODO: COUPLING MATRICES
+
+      ! if (CouplingFlag .ne. 0) then
+      !    call calcCoupling2_0(NumStates, RDerivDelt, LB%Psi, CB%Psi, RB%Psi, CB%alpha, CB%beta, RB%alpha, RB%beta, CB%S)
+      ! endif
+
    !   if (CouplingFlag .ne. 0) then
    !      call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP) !!!FIX THIS
 
@@ -746,9 +771,9 @@ subroutine CalcQMatrix(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,
 
   do j = 1,NumStates
      do k = 1,MatrixDim
-        TempPsi1(k) = lPsi(k,j)+rPsi(k,j)-2.0d0*mPsi(k,j)
+        TempPsi1(k) = lPsi(k,j)+rPsi(k,j)-2.0d0*mPsi(k,j) ! j is 1, k = 0 through  matrixdim is set by lpsi+rpsi(1,k) - 2mpsi(1,k)
      enddo
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi1,1,0.0d0,TempPsi2,1)
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi1,1,0.0d0,TempPsi2,1) !matrix multiplication, s * temp1 = tmp 2
      do i = 1,NumStates
         Q(i,j) = a*ddot(MatrixDim,TempPsi2,1,mPsi(1,i),1)
      enddo
@@ -1016,7 +1041,12 @@ subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
   return
 end subroutine GridMaker
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
   implicit none
@@ -1035,7 +1065,7 @@ subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S
        TempPsiB(MatrixDim),rSumPsi(MatrixDim))
   allocate(TempmPsi(MatrixDim))
 
-  aP = 0.5d0/RDelt
+  aP = 0.5d0/RDelt !RDerivDelt
   aQ = aP*aP
 
   do j = 1,NumStates
@@ -1060,7 +1090,7 @@ subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S
         do k = 1,MatrixDim
            lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
         enddo
-        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1)
+        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1) !symmetric Q = -P^2
      enddo
   enddo
 

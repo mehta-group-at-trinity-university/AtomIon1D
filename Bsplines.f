@@ -2,11 +2,12 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ccccc new CalcBasisFuncsBP as of April 26, 2023 ccccc
 cc Declared kLeft (RVal_L) and kRight (RVal_R) in here; 
       subroutine CalcBasisFuncsBP(Left,Right,RVal_L, RVal_R, Order,xPoints,LegPoints,
-     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
+     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u, alpha, beta)
       implicit none
       integer Left,Right,Order,LegPoints,MatrixDim,xBounds(*),
      >     xNumPoints,Deriv
       double precision xPoints(*),xLeg(*)
+      double precision alpha,beta
       double precision u(LegPoints,xNumPoints,MatrixDim)
       double precision xScale
 
@@ -124,6 +125,7 @@ cc Declared kLeft (RVal_L) and kRight (RVal_R) in here;
      >       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)))/
      >        (MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1)) - 
      >        MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1))*RVal_L)
+         alpha = constLeft
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
@@ -200,6 +202,7 @@ cc Declared kLeft (RVal_L) and kRight (RVal_R) in here;
      >        -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))) / ( 
      >        MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints)) - 
      >        MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*RVal_R)
+         alpha = constRight
          do k = 1,xNumPoints-1
             ax = xPoints(k)
             bx = xPoints(k+1)
