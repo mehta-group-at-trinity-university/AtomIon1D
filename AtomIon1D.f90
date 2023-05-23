@@ -152,8 +152,6 @@ program HHL1DHyperspherical
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
   C4 = C4/(hbar*omega*lho**4)
-  !phi = COTAN(1/phi) ! Reverses small-angle approximation, if necessary
-  !sNb = 1.d0/(-dble(Nbs)*Pi + phi) !sNb is sNb from new notes
   sNb = 1.d0/(dble(Nbs)*Pi + phi) !sNb is sNb from new notes
   
   write(6,*) "C4 = ", C4

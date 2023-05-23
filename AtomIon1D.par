@@ -14,7 +14,7 @@ Legendre Points
   1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
 
 xPoints    f-omega 	     Nbs	      C4     	      		 phi
-400 	   3.2d5		     3                1.121d-56 	 	 0.10687727
+400 	   3.2d5		     3                1.121d-56 	 	 -0.106877437
 
  RSteps   RDerivDelt     RFirst    	      RLast
   100       0.0001d0      0.5d0    	      30.0d0
