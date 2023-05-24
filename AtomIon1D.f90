@@ -436,11 +436,12 @@ program HHL1DHyperspherical
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      write(6,*) 'Calculating the P-matrix couplings!'
+   write(6,*) 'Calculating the P-matrix couplings!'
 
-      call calc_physical_overlap(RDerivDelt, CB%Psi, RB%Psi, CB%alpha, RB%alpha, CB%beta, RB%beta, PB%S, CB%S, CB, ncv, Order)
+   call calc_physical_overlap(RDerivDelt, CB%Psi, RB%Psi, CB%alpha, RB%alpha, CB%beta, RB%beta,&
+    PB%S, CB%S, CB, ncv, Order,HalfBandWidth)
 
-     endif
+   endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -546,15 +547,16 @@ end program HHL1DHyperspherical
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_beta, r_beta, S_prim, S_phys,u, ncv, order)
+subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_beta, r_beta, S_prim,&
+ S_phys,u, ncv, order, HalfBandWidth)
    !!!!!!!!!!!!!!!P - MATRIX!!!!!!!!!!!!!!!!
    use BasisSets
 
    implicit none
    TYPE(basis) u
-   integer m,n, N_, ncv, order
-   double precision RDerivDelt, mPsi(u%xDim,ncv), rPsi(u%xDim,ncv), m_alpha, r_alpha, m_beta, r_beta, S_prim(Order+1,u%xDim),&
-    S_phys(Order+1,u%xDim+2)
+   integer m,n, N_, ncv, order, HalfBandWidth, row, column, NewRow
+   double precision RDerivDelt, mPsi(u%xDim,ncv), rPsi(u%xDim,ncv), m_alpha, r_alpha, m_beta, r_beta,&
+    S_prim(HalfBandWidth+1,u%xDim+2), S_phys(HalfBandWidth+1,u%xDim)
 
    ! ncv = 2* numstates
 
@@ -565,48 +567,119 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
 
    print*, 'Beginning calculations for P-matrix.'
 
-   N_ = u%xDim+2 ! fix
+   N_ = u%xDim ! fix
 
       !P = 1/RDerivDelt * (term_1-term_2)
 
    print*, 'Populating physical set...'
 
-   ! m and n should both range up to 402, s.t. they are calculated from primitive indices up to 404
+   ! m and n should both range up to 402 , s.t. they are calculated using primitive indices up to 404
    ! but they are being calculated from S_prim, which has size of 404 x 160, not 404 x 404
 
-   do m = 1, N_-2, 1
-      do n = 1, N_-2, 1
-         S_phys(m,n) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim)
+   ! Halfbandwidth = 6
+
+   ! do n=1, u%xDim
+   !    row = n 
+   !    do m = max(1,n-HalfBandWidth), min(u%xDim, n+HalfBandWidth)
+   !    column = m
+   !       if (column .ge. row) then
+   !          NewRow = HalfBandWidth+1+row-column
+   !          S_phys(NewRow,column) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim,HalfBandWidth) !This here would work perfectly if S_prim were normal matrix
+   !       endif
+   !    enddo
+   ! enddo
+
+   do m=1, u%xDim
+      row = m 
+      do n = max(1,m-HalfBandWidth), min(u%xDim, m+HalfBandWidth)
+      column = n
+         if (column .ge. row) then
+            NewRow = HalfBandWidth+1+row-column
+            S_phys(NewRow,column) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim,HalfBandWidth) !This here would work perfectly if S_prim were normal matrix
+         endif
       enddo
    enddo
-
-   !S_phys(m,n) = calc_overlap_elem(1,1,m_alpha, r_alpha, m_beta, r_beta, S_prim)
 
    print*, 'Physical set populated.'
 
    contains
 
-   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim) ! s passed here is primitive S
+   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
 
-   integer m,n
+   integer m,n, HalfBandWidth, row, column, term_1, term_2
    double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
 
-         if ((m .gt. 1).and.(m .lt. N_)) then
+   !but since S_prim is also a banded matrix, m and n must be mapped AFTER they have been appropriately shifted given the conditions of normal S_prim
 
+   !row = n
+   !column = m
+   !if (column .ge. row) then
+   !   NewRow = HalfBandWidth+1+row-column
+
+   print*, 'passing in (m,n) = ', m, n
+   !if (m .ge. 100) stop
+
+         if ((m .gt. 1).and.(m .lt. N_)) then
             if ((n .gt. 1).and.(n .lt. N_)) then
-               calc_overlap_elem = S_prim(m+1,n+1)
+               !calc_overlap_elem = S_prim(row+1,column+1) this is what would happen if S_prim were normal
+               row = m+1
+               column = n+1
+               NewRow = HalfBandWidth+1+row-column
+               calc_overlap_elem = S_prim(NewRow, column)
 
             else if (n .eq. 1) then
-               calc_overlap_elem = r_alpha*S_prim(1,m+1) + S_prim(2,m+1)
+               !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
+               row = 1
+               column = row + 1
+               NewRow = HalfBandWidth+1+row-column
+               term_1 = r_alpha*S_prim(NewRow,column)
+
+               row = 2
+               column = row + 1
+               NewRow = HalfBandWidth+1+row-column
+               term_2 = S_prim(NewRow,column)
+
+               calc_overlap_elem = term_1 + term_2
 
             else if (n .eq. N_) then
-               calc_overlap_elem = S_prim(m+1,N_+1) + r_beta*S_prim(m+1,N_+2)
+               !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
+               row = m + 1
+               column = N_+1
+               NewRow = HalfBandWidth+1+row-column
+               term_1 = S_prim(NewRow,column)
+
+               row = m + 1
+               column = N_+2
+               NewRow = HalfBandWidth+1+row-column
+               if (NewRow .eq. 0) then
+                  term_2 = 0
+               else if (NewRow .ne. 0) then
+                  term_2 = r_beta*S_prim(NewRow,column)
+               endif
+
+               calc_overlap_elem = term_1 + term_2
+
             endif
 
          else if (m .eq. 1) then
 
             if ((n .gt. 1).and.(n .lt. N_)) then
-               calc_overlap_elem = m_alpha*S_prim(1,n+1) + S_prim(2,n+1)
+               !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
+               row = 1
+               column = n+1
+               NewRow = HalfBandWidth+1+row-column
+               if (NewRow .eq. 0) then
+                  term_1 = 0
+               else if (NewRow .ne. 0) then
+                  term_1 = m_alpha*S_prim(NewRow,column)
+               endif
+
+               row = 2
+               column = n+1
+               NewRow = HalfBandWidth+1+row-column
+               term_1 = S_prim(NewRow,column)
+
+               calc_overlap_elem = term_1 + term_2
 
             else if (n .eq. 1) then
                calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
@@ -618,7 +691,7 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
          else if(m .eq. N) then
 
             if ((n .gt. 1).and.(n .lt. N_)) then
-               calc_overlap_elem = S_prim(N_+1,n+1) + m_beta*S_prim(N_+2,n+1)
+               calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
 
             else if (n .eq. 1) then
                ! TODO
@@ -627,6 +700,91 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
                calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
             endif
          endif
+      !endif
+   !endif
+         ! if ((m .gt. 1).and.(m .lt. N_)) then
+
+         !    if ((n .gt. 1).and.(n .lt. N_)) then
+         !       calc_overlap_elem = S_prim((HalfBandWidth+1)+(m+1)-(n+1),n+1)
+
+         !    else if (n .eq. 1) then
+         !       calc_overlap_elem = r_alpha*S_prim((HalfBandWidth+1)+((1)-(m+1)),m+1) + S_prim((HalfBandWidth+1)+(2-(m+1)),m+1)
+
+         !    else if (n .eq. N_) then
+         !       calc_overlap_elem = S_prim(((HalfBandWidth+1) + (m+1)-(N_+1)),N_+1) +&
+         !        r_beta*S_prim(((HalfBandWidth+1) + (m+1)-(N_+2)),N_+2)
+         !    endif
+
+         ! else if (m .eq. 1) then
+
+         !    if ((n .gt. 1).and.(n .lt. N_)) then
+         !       calc_overlap_elem = m_alpha*S_prim((HalfBandWidth+1)+((1)-(n+1)),n+1) + S_prim((HalfBandWidth+1)+((2)-(n+1)),n+1)
+
+         !    else if (n .eq. 1) then
+         !       calc_overlap_elem = m_alpha*r_alpha*S_prim((HalfBandWidth+1)+((1)-(1)),1)+&
+         !       m_alpha*S_prim((HalfBandWidth+1)+((1)-(2)),2)+&
+         !       r_alpha*S_prim((HalfBandWidth+1)+((1)-2),2)+S_prim((HalfBandWidth+1)+((2)-2),2)
+
+         !       !r_alpha*S_prim(2,1)+S_prim((HalfBandWidth+1)+((2)-n),2)
+
+         !       !r_alpha*S_prim((HalfBandWidth+1)+((2)-n),1)+S_prim((HalfBandWidth+1)+((2)-n),2)
+
+         !    else if (n .eq. N_) then
+         !       ! TODO
+         !    endif
+
+         ! else if(m .eq. N) then
+
+         !    if ((n .gt. 1).and.(n .lt. N_)) then
+         !       calc_overlap_elem = S_prim((HalfBandWidth+1)+((N_+1)-(n+1)),n+1)&
+         !        + m_beta*S_prim((HalfBandWidth+1)+((N_+2)-(n+1)),n+1)
+
+         !    else if (n .eq. 1) then
+         !       ! TODO
+
+         !    else if (n .eq. N_) then
+         !       calc_overlap_elem = S_prim((HalfBandWidth+1)+((N_+1)-(N_+1)),N_+1)+S_prim((HalfBandWidth+1)&
+         !       +((N_+1)-(N_+2)),N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim((HalfBandWidth+1)+((N_+2)-(N_+2)),N_+2)
+         !    endif
+         ! endif
+
+
+         ! ! if ((m .gt. 1).and.(m .lt. N_)) then
+
+         ! !    if ((n .gt. 1).and.(n .lt. N_)) then
+         ! !       calc_overlap_elem = S_prim(m+1,n+1)
+
+         ! !    else if (n .eq. 1) then
+         ! !       calc_overlap_elem = r_alpha*S_prim(1,m+1) + S_prim(2,m+1)
+
+         ! !    else if (n .eq. N_) then
+         ! !       calc_overlap_elem = S_prim(m+1,N_+1) + r_beta*S_prim(m+1,N_+2)
+         ! !    endif
+
+         ! ! else if (m .eq. 1) then
+
+         ! !    if ((n .gt. 1).and.(n .lt. N_)) then
+         ! !       calc_overlap_elem = m_alpha*S_prim(1,n+1) + S_prim(2,n+1)
+
+         ! !    else if (n .eq. 1) then
+         ! !       calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+
+         ! !    else if (n .eq. N_) then
+         ! !       ! TODO
+         ! !    endif
+
+         ! ! else if(m .eq. N) then
+
+         ! !    if ((n .gt. 1).and.(n .lt. N_)) then
+         ! !       calc_overlap_elem = S_prim(N_+1,n+1) + m_beta*S_prim(N_+2,n+1)
+
+         ! !    else if (n .eq. 1) then
+         ! !       ! TODO
+
+         ! !    else if (n .eq. N_) then
+         ! !       calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+         ! !    endif
+         ! ! endif
 
       end function calc_overlap_elem
 
