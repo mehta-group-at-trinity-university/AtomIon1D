@@ -433,7 +433,16 @@ program HHL1DHyperspherical
         call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,CB%Psi,RB%Psi)
         call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,RB%Psi,RB%Energies,ncv)
 
+      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+      write(6,*) 'Calculating the P-matrix couplings!'
+
+      call calc_physical_overlap(RDerivDelt, CB%Psi, RB%Psi, CB%alpha, RB%alpha, CB%beta, RB%beta, PB%S, CB%S, CB, ncv, Order)
+
      endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!     !write(6,*) 'Calling MyLargeDsband'
 !!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
@@ -535,7 +544,96 @@ program HHL1DHyperspherical
   stop
 end program HHL1DHyperspherical
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_beta, r_beta, S_prim, S_phys,u, ncv, order)
+   !!!!!!!!!!!!!!!P - MATRIX!!!!!!!!!!!!!!!!
+   use BasisSets
+
+   implicit none
+   TYPE(basis) u
+   integer m,n, N_, ncv, order
+   double precision RDerivDelt, mPsi(u%xDim,ncv), rPsi(u%xDim,ncv), m_alpha, r_alpha, m_beta, r_beta, S_prim(Order+1,u%xDim),&
+    S_phys(Order+1,u%xDim+2)
+
+   ! ncv = 2* numstates
+
+   print*, shape(S_prim)
+   print*, shape(S_phys)
+   print*, ncv
+   print*, u%xDim
+
+   print*, 'Beginning calculations for P-matrix.'
+
+   N_ = u%xDim+2 ! fix
+
+      !P = 1/RDerivDelt * (term_1-term_2)
+
+   print*, 'Populating physical set...'
+
+   ! m and n should both range up to 402, s.t. they are calculated from primitive indices up to 404
+   ! but they are being calculated from S_prim, which has size of 404 x 160, not 404 x 404
+
+   do m = 1, N_-2, 1
+      do n = 1, N_-2, 1
+         S_phys(m,n) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim)
+      enddo
+   enddo
+
+   !S_phys(m,n) = calc_overlap_elem(1,1,m_alpha, r_alpha, m_beta, r_beta, S_prim)
+
+   print*, 'Physical set populated.'
+
+   contains
+
+   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim) ! s passed here is primitive S
+
+   integer m,n
+   double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
+
+         if ((m .gt. 1).and.(m .lt. N_)) then
+
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               calc_overlap_elem = S_prim(m+1,n+1)
+
+            else if (n .eq. 1) then
+               calc_overlap_elem = r_alpha*S_prim(1,m+1) + S_prim(2,m+1)
+
+            else if (n .eq. N_) then
+               calc_overlap_elem = S_prim(m+1,N_+1) + r_beta*S_prim(m+1,N_+2)
+            endif
+
+         else if (m .eq. 1) then
+
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               calc_overlap_elem = m_alpha*S_prim(1,n+1) + S_prim(2,n+1)
+
+            else if (n .eq. 1) then
+               calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+
+            else if (n .eq. N_) then
+               ! TODO
+            endif
+
+         else if(m .eq. N) then
+
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               calc_overlap_elem = S_prim(N_+1,n+1) + m_beta*S_prim(N_+2,n+1)
+
+            else if (n .eq. 1) then
+               ! TODO
+
+            else if (n .eq. N_) then
+               calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+            endif
+         endif
+
+      end function calc_overlap_elem
+
+end subroutine calc_physical_overlap
+
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
 subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
      xNumPoints,u,xBounds,HalfBandWidth,S)
   implicit none
@@ -1040,10 +1138,6 @@ subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
 
   return
 end subroutine GridMaker
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
