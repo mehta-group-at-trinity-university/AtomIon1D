@@ -1,6 +1,69 @@
-0 & 0 & 0 & 0 & 0 & S_{16} & S_{17} & ... & S_{1,N-1} & S_{1,N}\\
-0 & 0 & 0 & 0 & S_{25} & S_{26} & S_{27} & ... & S_{2,N-1} & S_{2,N}\\
-0 & 0 & 0 & S_{34} & S_{35} & S_{36} & S_{37} & ... & S_{3,N-1} & S_{3,N}\\
-0 & 0 & S_{43} & S_{44} & S_{45} & S_{46} & S_{47} & ... & S_{4,N-1} & S_{4,N}\\
-0 & S_{52} & S_{53} & S_{54} & S_{55} & S_{56} & S_{57} & ... & S_{5,N-1} & S_{5,N}\\
-S_{61} & S_{62} & S_{63} & S_{64} & S_{65} & S_{66} & S_{67} & ... & S_{6,N-1} & S_{N,N}\\
+subroutine calcCoupling2_0(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
+  implicit none
+  integer NumStates,HalfBandWidth,MatrixDim
+  double precision RDerivDelt
+  double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
+  double precision S(HalfBandWidth+1,MatrixDim),testorth
+  double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
+
+  integer i,j,k,m,n
+  double precision aP,aQ,ddot
+  double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
+  double precision, allocatable :: TempmPsi(:)
+
+  allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
+       TempPsiB(MatrixDim),rSumPsi(MatrixDim))
+  allocate(TempmPsi(MatrixDim))
+
+  aP = 0.5d0/RDerivDelt !RDerivDelt
+  aQ = aP*aP
+
+  do j = 1,NumStates
+     do k = 1,MatrixDim
+        rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
+        rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)  ! Double check this is needed for <Phi'(R)|Phi'(R)>
+        !            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
+        !            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
+     enddo
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
+
+     do i = 1,NumStates
+
+        !            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
+        !            write(309,*) i,j, '   testorth=',testorth
+
+        P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1) + kronecker_delta/RDerivDelt
+        dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
+
+        do k = 1,MatrixDim
+           lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
+        enddo
+        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1) !symmetric Q = -P^2
+     enddo
+  enddo
+
+  do j=1,NumStates
+     do i=j,NumStates
+        dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
+        dP(j,i)=-dP(i,j)
+     enddo
+  enddo
+
+  deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
+
+  return
+
+  contains
+
+  double precision function kronecker_delta(m,n)
+      integer m,n
+      if (m .eq. n) then
+         kronecker_delta = 1
+      else
+         kronecker_delta = 0
+      endif
+   end function kronecker_delta
+
+end subroutine calcCoupling2_0
