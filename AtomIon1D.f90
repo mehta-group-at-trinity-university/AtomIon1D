@@ -564,30 +564,16 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
    print*, shape(S_phys)
    print*, ncv
    print*, u%xDim
+   print*, 'order = ', order
+   print*, 'HBW = ', HalfBandWidth
 
    print*, 'Beginning calculations for P-matrix.'
 
-   N_ = u%xDim ! fix
+   N_ = u%xDim ! 402
 
       !P = 1/RDerivDelt * (term_1-term_2)
 
    print*, 'Populating physical set...'
-
-   ! m and n should both range up to 402 , s.t. they are calculated using primitive indices up to 404
-   ! but they are being calculated from S_prim, which has size of 404 x 160, not 404 x 404
-
-   ! Halfbandwidth = 6
-
-   ! do n=1, u%xDim
-   !    row = n 
-   !    do m = max(1,n-HalfBandWidth), min(u%xDim, n+HalfBandWidth)
-   !    column = m
-   !       if (column .ge. row) then
-   !          NewRow = HalfBandWidth+1+row-column
-   !          S_phys(NewRow,column) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim,HalfBandWidth) !This here would work perfectly if S_prim were normal matrix
-   !       endif
-   !    enddo
-   ! enddo
 
    do m=1, u%xDim
       row = m 
@@ -604,40 +590,46 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
 
    contains
 
+   double precision function banded_zeros_check(row,col,HalfBandWidth,S)
+      integer row, col, HalfBandWidth, newRow
+      double precision :: S(:,:)
+
+      if ((row .lt. col).or.(row+HalfBandWidth .gt. col)) then
+         banded_zeros_check = 0
+      else
+         newRow = HalfBandWidth + 1 + (row - col)
+         banded_zeros_check = S(newRow, col)
+      endif
+   end function banded_zeros_check
+
    double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
 
-   integer m,n, HalfBandWidth, row, column, term_1, term_2
+   integer m,n, HalfBandWidth, row, column, term_1, term_2, term_3, term_4, testing
    double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
 
    !but since S_prim is also a banded matrix, m and n must be mapped AFTER they have been appropriately shifted given the conditions of normal S_prim
-
-   !row = n
-   !column = m
-   !if (column .ge. row) then
-   !   NewRow = HalfBandWidth+1+row-column
 
    print*, 'passing in (m,n) = ', m, n
    !if (m .ge. 100) stop
 
          if ((m .gt. 1).and.(m .lt. N_)) then
             if ((n .gt. 1).and.(n .lt. N_)) then
-               !calc_overlap_elem = S_prim(row+1,column+1) this is what would happen if S_prim were normal
+               !calc_overlap_elem = S_prim(row+1,column+1)
                row = m+1
                column = n+1
-               NewRow = HalfBandWidth+1+row-column
-               calc_overlap_elem = S_prim(NewRow, column)
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               calc_overlap_elem = term_1
 
             else if (n .eq. 1) then
                !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
                row = 1
                column = row + 1
-               NewRow = HalfBandWidth+1+row-column
-               term_1 = r_alpha*S_prim(NewRow,column)
+               term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                row = 2
                column = row + 1
-               NewRow = HalfBandWidth+1+row-column
-               term_2 = S_prim(NewRow,column)
+               term_2 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                calc_overlap_elem = term_1 + term_2
 
@@ -645,17 +637,11 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
                !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
                row = m + 1
                column = N_+1
-               NewRow = HalfBandWidth+1+row-column
-               term_1 = S_prim(NewRow,column)
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                row = m + 1
                column = N_+2
-               NewRow = HalfBandWidth+1+row-column
-               if (NewRow .eq. 0) then
-                  term_2 = 0
-               else if (NewRow .ne. 0) then
-                  term_2 = r_beta*S_prim(NewRow,column)
-               endif
+               term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                calc_overlap_elem = term_1 + term_2
 
@@ -667,37 +653,106 @@ subroutine calc_physical_overlap(RDerivDelt, mPsi, rPsi, m_alpha, r_alpha, m_bet
                !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
                row = 1
                column = n+1
-               NewRow = HalfBandWidth+1+row-column
-               if (NewRow .eq. 0) then
-                  term_1 = 0
-               else if (NewRow .ne. 0) then
-                  term_1 = m_alpha*S_prim(NewRow,column)
-               endif
+               term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                row = 2
                column = n+1
-               NewRow = HalfBandWidth+1+row-column
-               term_1 = S_prim(NewRow,column)
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                calc_overlap_elem = term_1 + term_2
 
             else if (n .eq. 1) then
-               calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+               !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+               row = 1
+               column = 1
+               term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               row = 1
+               column = 2
+               term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               row = 2
+               column = 1
+               term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               row = 2
+               column = 2
+               term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               calc_overlap_elem = term_1+term_2+term_3+term_4
 
             else if (n .eq. N_) then
-               ! TODO
+               !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
+               row = 1
+               column = N_+1
+               term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = 1
+               column = N_+2
+               term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = 2
+               column = N_+1
+               term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = 2
+               column = N_+2
+               term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               calc_overlap_elem = term_1+term_2+term_3+term_4
+
             endif
 
          else if(m .eq. N) then
 
             if ((n .gt. 1).and.(n .lt. N_)) then
-               calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
+               !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
+               row = N_+1
+               column = n+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               row = N_+2
+               column = n+1
+               term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               calc_overlap_elem = term_1+term_2
 
             else if (n .eq. 1) then
-               ! TODO
+               !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
+               row = N_+1
+               column = 1
+               term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 2
+               term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 1
+               term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 2
+               term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               calc_overlap_elem = term_1+term_2+term_3+term_4
 
             else if (n .eq. N_) then
-               calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+               !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+               row = N_+1
+               column = N_+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               
+               row = N_+1
+               column = N_+2
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
+
+               row = N_+2
+               column = N_+2
+               term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+
+               calc_overlap_elem = term_1+term_2+term_3
+
             endif
          endif
       !endif
