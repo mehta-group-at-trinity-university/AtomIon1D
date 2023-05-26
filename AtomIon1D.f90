@@ -614,7 +614,8 @@ TYPE(BASIS) CB, RB
 double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
 
 do i = 1, CB%xDim
-   do j = 1, CB%xDim
+   !do j = 1, CB%xDim
+   do j = 1, max(1,i-H), min(xDim,i+H)
       S_ij = calc_overlap_elem(i,j, CB%alpha, RB%alpha, CB%beta, RB%beta, S_prim, HalfBandWidth)
       term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
    enddo
@@ -787,7 +788,7 @@ double precision function banded_zeros_check(row,col,HalfBandWidth,S)
 
             endif
          endif
-      end function calc_overlap_elem
+   end function calc_overlap_elem
 
 end subroutine calcCouplings_v2
 

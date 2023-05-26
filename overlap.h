@@ -4,10 +4,6 @@ do kx = 1,xNumPoints-1
      xIntScale(kx) = 0.5d0*(bx-ax)
   enddo
 
-  !      do ix=1,xNumPoints+2*Order
-  !         print*, ix, xBounds(ix)
-  !      enddo
-
   do ix = 1,xDim
      do ixp = 1,xDim
         kxMin(ixp,ix) = max(xBounds(ix),xBounds(ixp))
