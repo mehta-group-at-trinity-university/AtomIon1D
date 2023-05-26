@@ -218,8 +218,8 @@ program HHL1DHyperspherical
   HalfBandWidth = Order
   LeadDim = 3*HalfBandWidth+1
 
-  allocate(S_lm(Order+1,xDim))
-  allocate(S_mr(Order+1,xDim))
+  allocate(S_lm(2*HalfBandWidth+1,xDim))
+  allocate(S_mr(2*HalfBandWidth,xDim))
 
   TotalMemory = 2.0d0*(HalfBandWidth+1)*MatrixDim ! S, H
   TotalMemory = TotalMemory + 2.0d0*LegPoints*(Order+2)*xDim ! x splines
@@ -285,6 +285,7 @@ program HHL1DHyperspherical
      !     must move this block inside the loop over iR if the grid is adaptive
 
       print*, 'Beginning iteration at iR = ', iR
+      print*, 'Such that R(iR) = ', R(iR)
 
       !sNb = 1.d0/(dble(Nbs)*Pi + phi)
 
@@ -444,8 +445,7 @@ program HHL1DHyperspherical
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   call calc_physical_overlap(RDerivDelt, CB, RB, s_mr, PB%S,HalfBandWidth)
-   call calc_physical_overlap(RDerivDelt, LB, CB, S_lm, PB%S,HalfBandWidth)
+   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
    endif
 
@@ -552,68 +552,53 @@ program HHL1DHyperspherical
   stop
 end program HHL1DHyperspherical
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!!!!!!!!!!!!!!!!!!!!!! (LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
-subroutine calcCoupling2_0(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
-  implicit none
-  integer NumStates,HalfBandWidth,MatrixDim
-  double precision RDerivDelt
-  double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
-  double precision S(HalfBandWidth+1,MatrixDim),testorth
-  double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
+subroutine calcCouplings_v2(LB, CB, RB, P, Q, S_prim, HalfBandWidth, NumStates, RDerivDelt)
 
-  integer i,j,k,m,n
-  double precision aP,aQ,ddot
-  double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
-  double precision, allocatable :: TempmPsi(:)
+ use BasisSets
 
-  allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
-       TempPsiB(MatrixDim),rSumPsi(MatrixDim))
-  allocate(TempmPsi(MatrixDim))
+ implicit none
 
-  aP = 0.5d0/RDerivDelt !RDerivDelt
-  aQ = aP*aP
+ TYPE(basis) LB, CB, RB
+ double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
+ integer HalfBandWidth, NumStates
 
-  do j = 1,NumStates
-   !   do k = 1,MatrixDim
-   !      rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
-   !      rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)  ! Double check this is needed for <Phi'(R)|Phi'(R)>
-   !      !            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
-   !      !            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
-   !   enddo
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
+ integer mu, nu, N_
+ double precision P_term_1, Q_term_1, Q_term_2
 
-     do i = 1,NumStates
+ N_ = CB%xDim+2
 
-        !            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
-        !            write(309,*) i,j, '   testorth=',testorth
+!P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
 
-        P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1) + kronecker_delta(i,j)/RDerivDelt
-        dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
+print*, 'Calculating P matrix...' 
 
-        do k = 1,MatrixDim
-           lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
-        enddo
-        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1) !symmetric Q = -P^2
-     enddo
-  enddo
+do mu = 1, NumStates
+   do nu = 1, NumStates
+      P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      P(mu,nu) = 1/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
+   enddo
+enddo
 
-  do j=1,NumStates
-     do i=j,NumStates
-        dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
-        dP(j,i)=-dP(i,j)
-     enddo
-  enddo
+print*, 'Done Calculating P Matrix!'
 
-  deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
+!Q(mu,nu) = 1/RDerivDelt**2 * (Q_term_1(mu,nu) + Q_term_2(mu,nu) - 2*kronecker_delta)
 
-  return
+print*, 'Calculating Q matrix...'
 
-  contains
+do mu = 1, NumStates
+   do nu = 1, NumStates
+      Q_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      Q_term_2 = calc_P_term_1(mu,nu, LB, CB, S_prim, HalfBandWidth) !! double check this
+      Q(mu,nu) = 1/RDerivDelt**2 * (Q_term_1+Q_term_2-2*kronecker_delta(mu,nu))
+   enddo
+enddo
 
-  double precision function kronecker_delta(m,n)
+print*, 'Done Calculating Q Matrix!'
+
+contains
+
+double precision function kronecker_delta(m,n)
       integer m,n
       if (m .eq. n) then
          kronecker_delta = 1
@@ -622,49 +607,24 @@ subroutine calcCoupling2_0(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPs
       endif
    end function kronecker_delta
 
-end subroutine calcCoupling2_0
+double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth) !function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth)
 
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+integer mu, nu, HalfBandWidth, i, j
+TYPE(BASIS) CB, RB
+double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine calc_physical_overlap(RDerivDelt, u, u_shift, S_phys, S_prim, HalfBandWidth)
-
-   use BasisSets
-   implicit none
-
-   TYPE(basis) u
-   TYPE(basis) u_shift
-
-   integer m, n, N_, HalfBandWidth, row, column, newRow
-
-   double precision RDerivDelt, m_alpha, r_alpha, m_beta, r_beta, S_phys(HalfBandWidth+1, u%xDim), S_prim(HalfBandWidth+1, u%xDim+2)
-
-   m_alpha = u%alpha
-   m_beta = u%beta
-   r_alpha = u_shift%alpha
-   r_beta = u_shift%beta
-
-   N_ = u%xDim ! 402
-
-   print*, 'Populating physical set...'
-
-   do m=1, u%xDim
-      row = m 
-      do n = max(1,m-HalfBandWidth), min(u%xDim, m+HalfBandWidth)
-      column = n
-         if (column .ge. row) then
-            NewRow = HalfBandWidth+1+row-column
-            S_phys(NewRow,column) = calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim,HalfBandWidth) !This here would work perfectly if S_prim were normal matrix
-         endif
-      enddo
+do i = 1, CB%xDim
+   do j = 1, CB%xDim
+      S_ij = calc_overlap_elem(i,j, CB%alpha, RB%alpha, CB%beta, RB%beta, S_prim, HalfBandWidth)
+      term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
    enddo
+enddo
 
-   print*, 'Physical set populated.'
+end function calc_P_term_1
 
-   contains
+!!!!!
 
-   double precision function banded_zeros_check(row,col,HalfBandWidth,S)
+double precision function banded_zeros_check(row,col,HalfBandWidth,S)
       integer row, col, HalfBandWidth, newRow
       double precision :: S(:,:)
 
@@ -674,6 +634,7 @@ subroutine calc_physical_overlap(RDerivDelt, u, u_shift, S_phys, S_prim, HalfBan
          newRow = HalfBandWidth + 1 + (row - col)
          banded_zeros_check = S(newRow, col)
       endif
+
    end function banded_zeros_check
 
    double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
@@ -681,7 +642,7 @@ subroutine calc_physical_overlap(RDerivDelt, u, u_shift, S_phys, S_prim, HalfBan
    integer m,n, HalfBandWidth, row, column, term_1, term_2, term_3, term_4, testing
    double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
 
-   print*, 'passing in (m,n) = ', m, n
+   !print*, 'passing in (m,n) = ', m, n
 
          if ((m .gt. 1).and.(m .lt. N_)) then
             if ((n .gt. 1).and.(n .lt. N_)) then
@@ -827,7 +788,11 @@ subroutine calc_physical_overlap(RDerivDelt, u, u_shift, S_phys, S_prim, HalfBan
             endif
          endif
       end function calc_overlap_elem
-end subroutine calc_physical_overlap
+
+end subroutine calcCouplings_v2
+
+!!!!!!!!!!!!!!!!!!!!!!
+
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
@@ -1339,64 +1304,6 @@ end subroutine GridMaker
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
-  implicit none
-  integer NumStates,HalfBandWidth,MatrixDim
-  double precision RDelt
-  double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
-  double precision S(HalfBandWidth+1,MatrixDim),testorth
-  double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
-
-  integer i,j,k
-  double precision aP,aQ,ddot
-  double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
-  double precision, allocatable :: TempmPsi(:)
-
-  allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
-       TempPsiB(MatrixDim),rSumPsi(MatrixDim))
-  allocate(TempmPsi(MatrixDim))
-
-  aP = 0.5d0/RDelt !RDerivDelt
-  aQ = aP*aP
-
-  do j = 1,NumStates
-     do k = 1,MatrixDim
-        rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
-        rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)  ! Double check this is needed for <Phi'(R)|Phi'(R)>
-        !            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
-        !            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
-     enddo
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
-
-     do i = 1,NumStates
-
-        !            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
-        !            write(309,*) i,j, '   testorth=',testorth
-
-        P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1)
-        dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
-
-        do k = 1,MatrixDim
-           lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
-        enddo
-        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1) !symmetric Q = -P^2
-     enddo
-  enddo
-
-  do j=1,NumStates
-     do i=j,NumStates
-        dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
-        dP(j,i)=-dP(i,j)
-     enddo
-  enddo
-
-  deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
-
-  return
-end subroutine CalcCoupling
-
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 double precision function VSech(rij,DD,L)
@@ -1597,4 +1504,5 @@ end subroutine CalcEigenErrors
 !!$c$$$      enddo
 !!$c$$$      end
 !!$         
+
 

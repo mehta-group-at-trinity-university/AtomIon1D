@@ -287,8 +287,6 @@ program HHL1DHyperspherical
       print*, 'Beginning iteration at iR = ', iR
       print*, 'Such that R(iR) = ', R(iR)
 
-      if (iR .eq. 99) stop
-
       !sNb = 1.d0/(dble(Nbs)*Pi + phi)
 
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
@@ -447,7 +445,7 @@ program HHL1DHyperspherical
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   subroutine calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
    endif
 
@@ -558,217 +556,227 @@ end program HHL1DHyperspherical
 
 subroutine calcCouplings_v2(LB, CB, RB, P, Q, S_prim, HalfBandWidth, NumStates, RDerivDelt)
 
-! use BasisSets
+ use BasisSets
 
-! TYPE(BASIS) LB, CB, RB
-! double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2)
-! integer HalfBandWidth
+ implicit none
 
-! integer mu, nu
+ TYPE(basis) LB, CB, RB
+ double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
+ integer HalfBandWidth, NumStates
 
-! !P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
+ integer mu, nu, N_
+ double precision P_term_1
 
-! do mu = 1, NumStates
-!    do nu = 1, NumStates
-!       P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-!       P(mu,nu) = 1/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
-!    enddo
-! enddo
+ N_ = CB%xDim+2
 
-! contains
+!P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
 
-! double precision function kronecker_delta(m,n)
-!       integer m,n
-!       if (m .eq. n) then
-!          kronecker_delta = 1
-!       else
-!          kronecker_delta = 0
-!       endif
-!    end function kronecker_delta
+print*, 'Calculating P matrix...' 
+do mu = 1, NumStates
+   do nu = 1, NumStates
+      P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      P(mu,nu) = 1/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
+   enddo
+enddo
 
-! double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth) !function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth)
 
-! integer mu, nu, HalfBandWidth
-! double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2)
-! TYPE(BASIS) CB, RB
+print*, 'Done Calculating P Matrix!' 
+print*, 'Calculating Q matrix...' 
 
-! do i = 1, xDim
-!    do j = 1, xDim
-!       S_ij = calc_overlap_elem(i,j, CB%alpha, RB%alpha, CB%beta, RB%beta, S_prim, HalfBandWidth)
-!       term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
-!    enddo
-! enddo
+contains
 
-! end function calc_P_term_1
+double precision function kronecker_delta(m,n)
+      integer m,n
+      if (m .eq. n) then
+         kronecker_delta = 1
+      else
+         kronecker_delta = 0
+      endif
+   end function kronecker_delta
 
-! !!!!!
+double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth) !function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth)
 
-! double precision function banded_zeros_check(row,col,HalfBandWidth,S)
-!       integer row, col, HalfBandWidth, newRow
-!       double precision :: S(:,:)
+integer mu, nu, HalfBandWidth, i, j
+TYPE(BASIS) CB, RB
+double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
 
-!       if ((row .lt. col).or.(row+HalfBandWidth .gt. col)) then
-!          banded_zeros_check = 0
-!       else
-!          newRow = HalfBandWidth + 1 + (row - col)
-!          banded_zeros_check = S(newRow, col)
-!       endif
+do i = 1, CB%xDim
+   do j = 1, CB%xDim
+      S_ij = calc_overlap_elem(i,j, CB%alpha, RB%alpha, CB%beta, RB%beta, S_prim, HalfBandWidth)
+      term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
+   enddo
+enddo
 
-!    end function banded_zeros_check
+end function calc_P_term_1
 
-!    double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
+!!!!!
 
-!    integer m,n, HalfBandWidth, row, column, term_1, term_2, term_3, term_4, testing
-!    double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
+double precision function banded_zeros_check(row,col,HalfBandWidth,S)
+      integer row, col, HalfBandWidth, newRow
+      double precision :: S(:,:)
 
-!    print*, 'passing in (m,n) = ', m, n
+      if ((row .lt. col).or.(row+HalfBandWidth .gt. col)) then
+         banded_zeros_check = 0
+      else
+         newRow = HalfBandWidth + 1 + (row - col)
+         banded_zeros_check = S(newRow, col)
+      endif
 
-!          if ((m .gt. 1).and.(m .lt. N_)) then
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = S_prim(row+1,column+1)
-!                row = m+1
-!                column = n+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+   end function banded_zeros_check
 
-!                calc_overlap_elem = term_1
+   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
-!                row = 1
-!                column = row + 1
-!                term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+   integer m,n, HalfBandWidth, row, column, term_1, term_2, term_3, term_4, testing
+   double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
 
-!                row = 2
-!                column = row + 1
-!                term_2 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+   !print*, 'passing in (m,n) = ', m, n
 
-!                calc_overlap_elem = term_1 + term_2
+         if ((m .gt. 1).and.(m .lt. N_)) then
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               !calc_overlap_elem = S_prim(row+1,column+1)
+               row = m+1
+               column = n+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
-!                row = m + 1
-!                column = N_+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               calc_overlap_elem = term_1
 
-!                row = m + 1
-!                column = N_+2
-!                term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+            else if (n .eq. 1) then
+               !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
+               row = 1
+               column = row + 1
+               term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                calc_overlap_elem = term_1 + term_2
+               row = 2
+               column = row + 1
+               term_2 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             endif
+               calc_overlap_elem = term_1 + term_2
 
-!          else if (m .eq. 1) then
+            else if (n .eq. N_) then
+               !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
+               row = m + 1
+               column = N_+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
-!                row = 1
-!                column = n+1
-!                term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = m + 1
+               column = N_+2
+               term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = n+1
-!                term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               calc_overlap_elem = term_1 + term_2
 
-!                calc_overlap_elem = term_1 + term_2
+            endif
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
-!                row = 1
-!                column = 1
-!                term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+         else if (m .eq. 1) then
 
-!                row = 1
-!                column = 2
-!                term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
+               row = 1
+               column = n+1
+               term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = 1
-!                term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = 2
+               column = n+1
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = 2
-!                term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               calc_overlap_elem = term_1 + term_2
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+            else if (n .eq. 1) then
+               !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+               row = 1
+               column = 1
+               term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
-!                row = 1
-!                column = N_+1
-!                term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = 1
+               column = 2
+               term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 1
-!                column = N_+2
-!                term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = 2
+               column = 1
+               term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = N_+1
-!                term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = 2
+               column = 2
+               term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = N_+2
-!                term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               calc_overlap_elem = term_1+term_2+term_3+term_4
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+            else if (n .eq. N_) then
+               !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
+               row = 1
+               column = N_+1
+               term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!             endif
+               row = 1
+               column = N_+2
+               term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!          else if(m .eq. N) then
+               row = 2
+               column = N_+1
+               term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
-!                row = N_+1
-!                column = n+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = 2
+               column = N_+2
+               term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!                row = N_+2
-!                column = n+1
-!                term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               calc_overlap_elem = term_1+term_2+term_3+term_4
 
-!                calc_overlap_elem = term_1+term_2
+            endif
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
-!                row = N_+1
-!                column = 1
-!                term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+         else if(m .eq. N) then
 
-!                row = N_+2
-!                column = 2
-!                term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
+               row = N_+1
+               column = n+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = N_+2
-!                column = 1
-!                term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = N_+2
+               column = n+1
+               term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = N_+2
-!                column = 2
-!                term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               calc_overlap_elem = term_1+term_2
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+            else if (n .eq. 1) then
+               !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
+               row = N_+1
+               column = 1
+               term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
-!                row = N_+1
-!                column = N_+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = N_+2
+               column = 2
+               term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 1
+               term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 2
+               term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               calc_overlap_elem = term_1+term_2+term_3+term_4
+
+            else if (n .eq. N_) then
+               !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+               row = N_+1
+               column = N_+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
                
-!                row = N_+1
-!                column = N_+2
-!                term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
+               row = N_+1
+               column = N_+2
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
 
-!                row = N_+2
-!                column = N_+2
-!                term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+               row = N_+2
+               column = N_+2
+               term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
 
-!                calc_overlap_elem = term_1+term_2+term_3
+               calc_overlap_elem = term_1+term_2+term_3
 
-!             endif
-!          endif
-!       end function calc_overlap_elem
+            endif
+         endif
+      end function calc_overlap_elem
 
-end subroutine calc_Couplings_v2
+end subroutine calcCouplings_v2
 
 !!!!!!!!!!!!!!!!!!!!!!
 
