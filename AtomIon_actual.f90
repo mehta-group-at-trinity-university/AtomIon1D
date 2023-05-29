@@ -78,9 +78,8 @@ program HHL1DHyperspherical
    TYPE(basis) RB
 
    double precision tmp
-   integer row_tmp, col_tmp
 
-  integer LegPoints,xNumPoints, newRow
+  integer LegPoints,xNumPoints
   integer NumStates,PsiFlag,Order,Left,Right
   integer RSteps,CouplingFlag
   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
@@ -223,6 +222,7 @@ program HHL1DHyperspherical
 
   allocate(S_lm(2*HalfBandWidth+1,xDim))
   allocate(S_mr(2*HalfBandWidth,xDim))
+
   TotalMemory = 2.0d0*(HalfBandWidth+1)*MatrixDim ! S, H
   TotalMemory = TotalMemory + 2.0d0*LegPoints*(Order+2)*xDim ! x splines
   TotalMemory = TotalMemory + 2.0d0*NumStates*NumStates ! P and Q matrices
@@ -329,8 +329,6 @@ program HHL1DHyperspherical
      endif
      call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
         print*, 'done... Calculating Primitive Basis Functions'
-         tmp_alpha = 1
-         tmp_beta = 1
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta,.false.)
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
@@ -466,16 +464,45 @@ program HHL1DHyperspherical
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-   write(6,*) 'Calculating the overlaps and couplings!'
+   !write(6,*) 'Calculating the overlaps and couplings!'
 
    !print*, 'PB%S(6,5) = ', PB%S(6,5)
    !tmp = 0
 
+   ! call calc_overlap_elem(4,4,CB, RB, PB%S, HalfBandWidth, tmp)
+
+   ! print*, 'tmp =', tmp
+
+   ! stop
+
+   !stop
+
    !call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
-   !call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S)
-
    endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!     !write(6,*) 'Calling MyLargeDsband'
+!!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
+!!$c     >        Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
+!!$c     write(6,*) 'done...'
+!!$c     if (CouplingFlag .ne. 0) then
+!!$c     if(iR.gt.1) then
+!!$c     write(6,*) 'Calling FixPhase'
+!!$c     call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,NumStates,rPsi,mPsi)
+!!$c     endif
+!!$c     endif
+
+   !   call MyDsband(Select,Energies,mPsi,MatrixDim,Shift,MatrixDim,&
+   !        PB%H,PB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,NumStates,&
+   !        Tol,Residuals,ncv,mPsi,MatrixDim,iparam,workd,workl,&
+   !        ncv*ncv+8*ncv,iwork,info)
+   !   if (CouplingFlag .ne. 0) call FixPhase(NumStates,HalfBandWidth,&
+   !        MatrixDim,PB%S,ncv,rPsi,mPsi)
+
+   !   call CalcEigenErrors(info,iparam,MatrixDim,PB%H,HalfBandWidth+1,PB%S,&
+   !        HalfBandWidth,NumStates,mPsi,Energies,ncv)
 
      write(6,*) 'writing the energies'
      if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
@@ -520,32 +547,8 @@ program HHL1DHyperspherical
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!TESTING between coupling matrices
 
-write(915,*) 'S matrix Differences'
-write(910,*) 'Unequal indices'
-   do i = 1, CB%xDim
-      do j = 1, CB%xDim
-         call calc_overlap_elem(i,j,CB, CB, PB%S, HalfBandWidth, tmp)
-            if (tmp.ne.0) then
-               if(j.ge.i) then
-                  newRow = HalfBandWidth+1+(i-j)
-                  write(915,*) CB%S(newRow,j) - tmp
-                  if ((CB%S(newRow,j) - tmp).ne.0) then
-                     write(910,*) 'case 1 i = ', i, 'j = ', j
-                  endif
-               endif
-               if(j.lt.i) then
-                  newRow = HalfBandWidth+1+(j-i)
-                  write(915,*) CB%S(newRow,i) - tmp
-                  if ((CB%S(newRow,i) - tmp).ne.0) then
-                     write(910,*) 'case 2 i = ', i, 'j = ', j
-                  endif
-               endif
-            endif
-      enddo
-   enddo
-write(915,*) 'Done'
-write(910,*) 'Done'
-stop
+
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      
@@ -660,8 +663,8 @@ double precision RVal_L, RVal_R, xPoints(xNumPoints)
 TYPE(basis) b, pb
 !!REVISIT FOR cases other than L,R = 3,3
 
-b%alpha = 1!calc_alpha(b, RVal_L, Order, xNumPoints, xPoints)
-b%beta = 1!calc_beta(b, RVal_R, Order, xNumPoints, xPoints)
+b%alpha = calc_alpha(b, RVal_L, Order, xNumPoints, xPoints)
+b%beta = calc_beta(b, RVal_R, Order, xNumPoints, xPoints)
 
 b%u(:,:,1) = b%alpha*pb%u(:,:,1)+pb%u(:,:,2)
 b%uxx(:,:,1) = b%alpha*pb%uxx(:,:,1)+pb%uxx(:,:,2)
@@ -734,13 +737,8 @@ do mu = 1, NumStates
    enddo
 enddo
 
-do mu = 1, NumStates
-   do nu = 1, NumStates
-      if (P(mu,nu).ne.0d0)then
-         print*, 'P nonzero val: ', P(mu,nu)
-      endif
-   enddo
-enddo
+print*, 'P(40,41)', P(40,41)
+stop
 
 print*, 'Done Calculating P Matrix!'
 
@@ -785,8 +783,8 @@ contains
       enddo
    enddo
 
-   !print*, 'P(40,41) = ', P(40,39)
-   !stop
+   print*, 'P(40,41) = ', P(40,39)
+   stop
 
    end function calc_P_term_1
 
@@ -807,44 +805,54 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
    double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
    S_mn, term_1, term_2, term_3, term_4, testing
 
-   !N_ = u%xDim+2
-   N_ = u%xDim
+   N_ = u%xDim+2
    m_alpha = u%alpha
    r_alpha = ur%alpha
    m_beta = u%beta
    r_beta = ur%beta
 
-   if((m.eq.402).or.(n.eq.402)) then
-      print*,'EDGE: (m,n) = ', m,n
-   endif
+   print*, 'S_prim(6,5) = ', S_prim(6,5)
+
+   print*, 'N_ =', N_
+   print*, 'passing in (m,n) = ', m, n
 
          if ((m .gt. 1).and.(m .lt. N_)) then
             if ((n .gt. 1).and.(n .lt. N_)) then
-            print*, 'case 1'
+               !calc_overlap_elem = S_prim(row+1,column+1)
+               !print*, 'Made it to the correct case.'
                row = m+1
                column = n+1
+
+               !print*, 'row: ',row
+               !print*, 'column: ',column
+
+               !print*, 'S_prim(6,5) = ', S_prim(6,5) ! works
+
                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-               S_mn = term_1
+
+               !print*, 'term_1 = ', term_1
+               
+               S_mn = term_1 ! THIS IS THE PROBLEM it is not being modified!!!!
+
+               !print*, 'term_1 = ', S_mn
+
 
             else if (n .eq. 1) then
                !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
-            print*, 'case 2'
                row = 1
-               column = m + 1
+               column = row + 1
                term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                row = 2
-               column = m + 1
+               column = row + 1
                term_2 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                S_mn = term_1 + term_2
 
             else if (n .eq. N_) then
-            print*, 'case 3: m,n ',m,n
                !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
                row = m + 1
                column = N_+1
-
                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
                row = m + 1
@@ -858,7 +866,6 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
          else if (m .eq. 1) then
 
             if ((n .gt. 1).and.(n .lt. N_)) then
-               print*, 'case 4'
                !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
                row = 1
                column = n+1
@@ -871,7 +878,6 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
                S_mn = term_1 + term_2
 
             else if (n .eq. 1) then
-               print*, 'case 5'
                !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
                row = 1
                column = 1
@@ -892,7 +898,6 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
                S_mn = term_1+term_2+term_3+term_4
 
             else if (n .eq. N_) then
-               print*, 'case 6'
                !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
                row = 1
                column = N_+1
@@ -914,10 +919,9 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 
             endif
 
-         else if(m .eq. N_) then
+         else if(m .eq. N) then
 
             if ((n .gt. 1).and.(n .lt. N_)) then
-               print*, 'case 7'
                !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
                row = N_+1
                column = n+1
@@ -930,7 +934,6 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
                S_mn = term_1+term_2
 
             else if (n .eq. 1) then
-               print*, 'case 8'
                !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
                row = N_+1
                column = 1
@@ -948,12 +951,9 @@ subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
                column = 2
                term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-               print*, 'S_mn at 400,1 = ', term_1+term_2+term_3+term_4
-
                S_mn = term_1+term_2+term_3+term_4
 
             else if (n .eq. N_) then
-               print*, 'case 9'
                !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
                row = N_+1
                column = N_+1
@@ -978,16 +978,33 @@ contains
    implicit none
          integer row, col, HalfBandWidth, newRow, tmp
          double precision S_prim(:,:)
-         
-         if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
+         ! row, column = 5
+
+         !if ((row .lt. col).or.(row+HalfBandWidth .gt. col)) then
+         !if ((row .lt. (col+HalfBandWidth)).or.(row+HalfBandWidth .gt. col)) then !! double check this
+         !if((row+HalfBandWidth .gt. col).or.(row .gt. col)) then 
+         ! if((row+HalfBandWidth .gt. col)) then 
+         !    print*, '1'
+         !    banded_zeros_check = 0d0
+         ! else if(col+HalfBandWidth .lt. row) then
+         !    print*, '2'
+         !    banded_zeros_check = 0d0
+
+         if((row+HalfBandWidth .gt. col).or.(row-HalfBandWidth .lt. col)) then 
+             print*, '1'
              banded_zeros_check = 0d0
+
          else
+            print*, '3'
             if(row .gt. col) then
-               tmp = row
+               row = tmp
                row = col
                col = tmp
             endif
+
             newRow = HalfBandWidth + 1 + (row - col)
+            print*, 'passing banded indices: ', newRow, col
+            print*, 'S_prim(indices) = ', S_prim(newRow, col)
             banded_zeros_check = S_prim(newRow, col)
          endif
 
@@ -1708,5 +1725,6 @@ end subroutine CalcEigenErrors
 !!$c$$$      enddo
 !!$c$$$      end
 !!$         
+
 
 
