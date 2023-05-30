@@ -279,6 +279,11 @@ program HHL1DHyperspherical
 
   end if
 
+   open(unit = 200, file = "energies.dat")
+   open(unit = 101, file = "P_Matrix.dat")
+   open(unit = 102, file = "Q_Matrix.dat")
+
+
   RChange=100.d0
   do iR = RSteps,1,-1!RSteps
      NumFirst=NumStates
@@ -299,9 +304,6 @@ program HHL1DHyperspherical
       !write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
       
       print*, 'calling GridMaker.'
-
-      !xMin = theta_c + dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! Now using small-angle approximation
-      !xMax = Pi + theta_c - dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! ''
 
       if (CouplingFlag .eq. 0) then
      xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
@@ -362,15 +364,6 @@ program HHL1DHyperspherical
          write(6,*) 'CB%alpha (u) = ', CB%alpha
          write(6,*) 'CB%beta (u) = ', CB%beta
 
-      !  call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      !  xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta, .false.)
-      !     write(6,*) 'CB%alpha (u) = ', CB%alpha
-      !     write(6,*) 'CB%beta (u) = ', CB%beta
-      ! call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      ! xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx, CB%alpha, CB%beta, .false.)
-      !    write(6,*) 'CB%alpha (uxx) = ', CB%alpha
-      !    write(6,*) 'CB%beta (uxx) = ', CB%beta
-
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
 
       write(6,*) 'Center Basis Set Constructed.'
@@ -388,33 +381,6 @@ program HHL1DHyperspherical
          oldPsi = CB%Psi
         !call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,mPsi,mPsi) !
         call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
-
-      ! tmp = 0d0
-
-      ! ! if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
-      ! !        banded_zeros_check = 0d0
-      ! !    else
-      ! imu = 2
-      ! inu = 1
-
-      ! do i = 1, CB%xDim
-      !    do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
-      !       if(j.ge.i) then
-      !          call calc_overlap_elem(i,j, CB, CB, PB%S, HalfBandWidth, tmp2)
-      !          tmp = tmp + CB%Psi(i,imu)*(tmp2*CB%Psi(j,inu))
-      !          !tmp = tmp + CB%Psi(i,imu)*(CB%S(HalfBandWidth+1+i-j,j)*CB%Psi(j,inu))
-      !       endif
-      !       if(j.lt.i) then
-      !          call calc_overlap_elem(i,j, CB, CB, PB%S, HalfBandWidth, tmp2) ! m > n
-      !          tmp = tmp + CB%Psi(i,imu)*(tmp2*CB%Psi(j,inu))
-      !          !tmp = tmp + CB%Psi(i,imu)*(CB%S(HalfBandWidth+1+j-i,i)*CB%Psi(j,inu))
-      !       endif
-      !    enddo
-      ! enddo
-
-      ! print*, 'tmp =', tmp
-
-      ! stop
 
 !!!!!!!!!
 
@@ -486,28 +452,6 @@ program HHL1DHyperspherical
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   !print*, 'PB%S(6,5) = ', PB%S(6,5)
-   !tmp = 0
-
-   ! tmp1 = 0d0
-   ! tmp2 = 0d0
-
-   ! write(915,*) 'S matrix Differences'
-   ! write(910,*) 'Unequal indices'
-   ! do i = 1, CB%xDim
-   !    do j = 1, CB%xDim
-   !       call calc_overlap_elem(i,j,CB, CB, PB%S, HalfBandWidth, tmp1)
-   !       call calc_overlap_elem(j,i,CB, CB, PB%S, HalfBandWidth, tmp2)
-   !       write(915,*) tmp1 - tmp2 ! write difference to fort.915
-   !       if ((tmp1 - tmp2).ne.0d0) then
-   !          write(910,*) 'i = ', i, 'j = ', j, 'difference =', tmp1 - tmp2
-   !          write(6,*) 'done 2' ! write potential problem indices in fort.910
-   !       endif
-   !    enddo
-   ! enddo
-
-   ! stop
-
    call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
         write(101,*) R(iR)
@@ -522,9 +466,9 @@ program HHL1DHyperspherical
    endif
 
      write(6,*) 'writing the energies'
-     if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+     !if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
      write(200,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     if (CouplingFlag .eq. 1) write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+     !if (CouplingFlag .eq. 1) write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -539,58 +483,7 @@ program HHL1DHyperspherical
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
-     endif         
-
-!!TODO: COUPLING MATRICES
-
-      ! if (CouplingFlag .ne. 0) then
-      !    call calcCoupling2_0(NumStates, RDerivDelt, LB%Psi, CB%Psi, RB%Psi, CB%alpha, CB%beta, RB%alpha, RB%beta, CB%S)
-      ! endif
-
-   !   if (CouplingFlag .ne. 0) then
-   !      call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP) !!!FIX THIS
-
-   !      write(101,*) R(iR)
-   !      write(102,*) R(iR)
-   !      write(103,*) R(iR)
-   !      do i = 1,min(NumStates,iparam(5))
-   !         write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
-   !         write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
-   !         write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
-   !      enddo
-   !   endif
-   !         write(400,20) R(iR),R(iR)**3.0d0*(Energies(2,1)-Q(2,2))
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!TESTING between coupling matrices
-
-! write(915,*) 'S matrix Differences'
-! write(910,*) 'Unequal indices'
-!    do i = 1, CB%xDim
-!       do j = 1, CB%xDim
-!          call calc_overlap_elem(i,j,CB, CB, PB%S, HalfBandWidth, tmp)
-!          if (tmp.ne.0d0) then ! looking for nonzero S(m,n) elements
-!             if(j.ge.i) then ! elements in the upper-right triangle
-!                newRow = HalfBandWidth+1+(i-j)
-!                write(915,*) CB%S(newRow,j) - tmp ! write difference to fort.915
-!                if ((CB%S(newRow,j) - tmp).ne.0) then
-!                   write(910,*) 'case 1 i = ', i, 'j = ', j ! write potential problem indices in fort.910
-!                endif
-!             endif
-!             if(j.lt.i) then ! elements in the lower-left triangle
-!                newRow = HalfBandWidth+1+(j-i)
-!                write(915,*) CB%S(newRow,i) - tmp ! write difference to fort.915
-!                if ((CB%S(newRow,i) - tmp).ne.0) then
-!                   write(910,*) 'case 2 i = ', i, 'j = ', j ! write potential problem indices in fort.910
-!                endif
-!             endif
-!          endif
-!       enddo
-!    enddo
-! write(915,*) 'Done'
-! write(910,*) 'Done'
-! stop
-
+     endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      
@@ -607,14 +500,11 @@ program HHL1DHyperspherical
   enddo
 
   deallocate(S_lm, S_mr)
-  !deallocate(S,H)
-  !deallocate(Energies)
   deallocate(iwork)
   deallocate(Select)
   deallocate(LUFac)
   deallocate(workl)
   deallocate(workd)
-  !deallocate(lPsi,mPsi,rPsi)
   deallocate(Residuals)
   deallocate(P,Q,dP)
   deallocate(xPoints)
@@ -782,25 +672,6 @@ enddo
 
 ct = 0
 
-
-
-! print*, 'Checking Diagonals'
-
-! do mu = 1, NumStates
-!          print*, 'mu, P(mu,mu) = ', mu, P(mu,mu)
-!          ct = ct + 1
-! enddo
-
-! print*, 'ct = ', ct
-
-! do mu = 1, NumStates
-!    do nu = 1, NumStates
-!          print*, 'mu,nu, P(mu,nu),P(nu,mu) = ', mu,nu, P(mu,nu),P(nu,mu)
-!    enddo
-! enddo
-
-!stop
-
 print*, 'Done Calculating P Matrix!'
 
 !Q(mu,nu) = 1/RDerivDelt**2 * (Q_term_1(mu,nu) + Q_term_2(mu,nu) - 2*kronecker_delta)
@@ -856,7 +727,6 @@ contains
 !!!!!
 end subroutine calcCouplings_v2
 
-!subroutine calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth, S_mn)
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 
    use BasisSets
