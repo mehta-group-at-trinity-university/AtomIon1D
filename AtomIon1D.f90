@@ -462,6 +462,8 @@ program HHL1DHyperspherical
            write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
            !write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
         enddo
+         write(107,*) 'Shape(P): ', Shape(P)
+         write(107,*) 'Shape(Q): ', Shape(Q)
 
    endif
 
@@ -726,6 +728,12 @@ contains
    end function calc_P_term_1
 !!!!!
 end subroutine calcCouplings_v2
+
+subroutine identify_crossings()
+
+!loop over states until you find the one with the avoided crossing
+
+end subroutine identify_crossings
 
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 
