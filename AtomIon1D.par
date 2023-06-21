@@ -1,5 +1,5 @@
 Number of energies		  PsiFlag		    Coupling Matrix
-      80                          0                            1
+      80                          0                            0
 
 Legendre File
 Legendre.dat
@@ -17,7 +17,7 @@ xPoints    f-omega 	     Nbs	      C4     	      		 phi
 400 	   3.2d5		     3                1.121d-56 	 	 -0.106877437
 
  RSteps   RDerivDelt     RFirst    	      RLast
-  500       0.0001d0      0.5d0    	      30.0d0
+  100       0.0001d0      0.5d0    	      30.0d0
 
 
 ! Pi/2=1.5707963267948966

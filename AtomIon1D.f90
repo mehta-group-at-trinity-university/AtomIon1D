@@ -84,16 +84,19 @@ program HHL1DHyperspherical
 
   integer LegPoints,xNumPoints, newRow
   integer NumStates,PsiFlag,Order,Left,Right
-  integer RSteps,CouplingFlag
+  integer RSteps,CouplingFlag, CrossingFlag
   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
   double precision xMin,xMax
   double precision, allocatable :: R(:)
   double precision, allocatable :: xPoints(:)
+  double precision, allocatable :: slopes(:,:)
+  double precision, allocatable :: nrg(:,:), left_nrg(:,:), right_nrg(:,:), tmp_nrg(:,:), curr_nrg(:,:)
 
   logical, allocatable :: Select(:)
 
+  integer swapstate
   integer iparam(11),ncv,info
   integer i,j,k,iR,NumFirst,NumBound
   integer LeadDim,MatrixDim,HalfBandWidth
@@ -104,7 +107,7 @@ program HHL1DHyperspherical
   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
   double precision YVal_L,RVal_L, RVal_R
 
-  double precision, allocatable :: oldPsi(:,:)
+  double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
@@ -114,6 +117,7 @@ program HHL1DHyperspherical
   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum
   character*64 LegendreFile
+  character*64 leftnrg
   common /Rvalue/ Rvalue      
   hbar = 1.054571817d-34
   amu = 1.660539d-27
@@ -199,6 +203,10 @@ program HHL1DHyperspherical
 !  XLast = dlog10(RLast)
 !  StepX=(XLast-XFirst)/(RSteps-1.d0)
 
+  allocate(slopes(RSteps,NumStates))
+  allocate(nrg(RSteps,NumStates))
+  allocate(left_nrg(RSteps,NumStates))
+  allocate(right_nrg(RSteps,NumStates))
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
   do i = 1,RSteps
@@ -248,6 +256,7 @@ program HHL1DHyperspherical
   ncv = 2*NumStates
   LeadDim = 3*HalfBandWidth+1
   allocate(oldPsi(MatrixDim,ncv))
+  allocate(oldEnergies(ncv,2))
   allocate(iwork(MatrixDim))
   allocate(Select(ncv))
   allocate(LUFac(LeadDim,MatrixDim))
@@ -282,10 +291,19 @@ program HHL1DHyperspherical
    open(unit = 200, file = "energies.dat")
    open(unit = 101, file = "P_Matrix.dat")
    open(unit = 102, file = "Q_Matrix.dat")
+   open(unit=11, file = "leftnrg.dat")
 
+   !open(unit=11,file=leftnrg(1:INDEX(leftnrg,' ')-1))
+   !open(unit=200,file=energies.dat(1:INDEX(energies.dat,' ')-1))
+   !open(unit=12,file=right_energies.dat(1:INDEX(right_energies.dat,' ')-1))
 
+   !open(unit = 1, file = "left_energies.dat")
+   !open(unit = 2, file = "right_energies.dat")
+
+  CrossingFlag = 0
   RChange=100.d0
-  do iR = RSteps,1,-1!RSteps
+  if (CrossingFlag.eq.0) then
+  do iR = RSteps,1,-1 !RSteps
      NumFirst=NumStates
      if (R(iR).gt.RChange) then
         NumFirst=NumBound
@@ -317,12 +335,6 @@ program HHL1DHyperspherical
 
      print*, 'Using xMin = ', xMin
      print*, 'Using xMax = ', xMax
-
-   !   print*, 'dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) = ', dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)
-
-   !    sbc = (sNb/RLeft)*R(iR)
-
-   !    print*, 'sbc using sbc = (sNb/RLeft)*R(iR):', sbc
 
       sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c)
 
@@ -370,24 +382,52 @@ program HHL1DHyperspherical
       
         call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
-        !            call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,rPsi,
-        !     >           Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
-        !            call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,NumStates,lPsi,rPsi)
         call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
              NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+
+         if(iR .ne. RSteps) then
+            allocate(curr_nrg(NumStates, RSteps-iR+1))
+            do i=1, NumStates !populate after MyDSBand
+               do j=1, RSteps-iR
+                  curr_nrg(i,j+1) = tmp_nrg(i,j)
+               enddo
+               curr_nrg(i,1)=CB%energies(i,1) ! new energies in first column
+            enddo
+            deallocate(tmp_nrg)
+            do i=1, NumStates !populate after MyDSBand
+               do j=1, RSteps-iR
+               enddo
+            enddo
+            call Avoided_Crossings(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1), NumStates,(R(iR+1)-R(iR)), swapstate)!changes curr_nrg and CB%energies
+            allocate(tmp_nrg(NumStates, RSteps-iR+1)) !new tmp_nrg to be used in next iteration
+            do i=1, NumStates
+               do j=1, RSteps-iR+1
+                 tmp_nrg(i,j) = curr_nrg(i,j)
+               enddo
+            enddo
+            deallocate(curr_nrg)
+         else
+            allocate(tmp_nrg(NumStates, 1))
+            do i = 1, NumStates
+               tmp_nrg(i,1) = CB%Energies(i,1)
+            enddo
+         endif
+         oldEnergies = CB%Energies !!declare oldEnergies
+         
+         write(200,20) R(iR), (tmp_nrg(i,1), i = 1,NumStates)
+
+         !Fix psis here :o
+
          if(iR .ne. RSteps) then
             call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
          endif
          oldPsi = CB%Psi
-        !call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,mPsi,mPsi) !
+
         call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
 
 !!!!!!!!!
 
      if (CouplingFlag .ne. 0) then
-        ! Inside this IF block we must have:
-        ! 1) Construction of the physical basis set at the left and right point
-        ! 2) ???
 
 !******** CONSTRUCTION OF LEFT BASIS SETS ********
 
@@ -450,6 +490,16 @@ program HHL1DHyperspherical
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+write(6,*) 'writing the energies'
+
+   !   if (CouplingFlag .eq. 1) write(12,20) (RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   write(200,20) (CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   if (CouplingFlag .eq. 1) write(11,20) (LB%Energies(i,1), i = 1,NumStates)
+   !   write(201,20) iR*1.0d0,(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   write(202,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
    write(6,*) 'Calculating the overlaps and couplings!'
 
    call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
@@ -466,11 +516,6 @@ program HHL1DHyperspherical
          write(107,*) 'Shape(Q): ', Shape(Q)
 
    endif
-
-     write(6,*) 'writing the energies'
-     !if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     write(200,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     !if (CouplingFlag .eq. 1) write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -499,7 +544,31 @@ program HHL1DHyperspherical
         close(unit=999+iR)
      endif
 
+   ! print*, 'shape(CB%energies)', shape(CB%energies)
+   ! print*, 'CB%energies(1,1)', CB%energies(1,1)
+   ! print*, 'CB%energies(80,1)', CB%energies(80,1)
+   ! print*, 'CB%energies(81,1)', CB%energies(81,1)
+
   enddo
+  endif
+
+   !do iR = 1, RSteps
+      !read(11,*) (left_nrg(iR,j), j = 1,NumStates)
+      !read(12,*) (right_nrg(iR,j), j = 1,NumStates)
+      !read(200,*) (nrg(iR,j), j = 1,NumStates)
+   !enddo
+
+   do iR = 1, RSteps
+      do i = 1, NumStates
+         slopes(iR,i) = (right_nrg(iR,i)-left_nrg(iR,i))/((R(iR)+RDerivDelt)-(R(iR)-RDerivDelt)) !Stores slope of each triad
+      enddo
+   enddo
+
+   close(11)
+   close(200)
+   deallocate(tmp_nrg)
+
+   call identify_crossings(slopes, nrg, RSteps, NumStates, R)
 
   deallocate(S_lm, S_mr)
   deallocate(iwork)
@@ -525,6 +594,79 @@ program HHL1DHyperspherical
 
   stop
 end program HHL1DHyperspherical
+!!!!!!!!!! Avoided_Crossings(CB%Energies,oldEnergies, tmp_nrg, (RSteps-iR), NumStates,(R(iR+1)-R(iR)))
+subroutine swap(swapstate, energy_array)
+implicit none
+double precision energy_array(80,2)
+integer swapstate, tmp, i
+
+do i = 1,2 !swaps each energy and it's derivative
+   tmp = energy_array(swapstate,i)
+   energy_array(swapstate,i) = energy_array(swapstate+1,i)
+   energy_array(swapstate+1,i) = tmp
+enddo
+
+end subroutine swap
+
+subroutine Avoided_Crossings(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate)
+implicit none
+double precision R1(NumStates,2), R2(NumStates,2), tmp_nrg(NumStates,tmp_size), tmp(tmp_size)
+double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2
+integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state
+
+if(swapstate.ne.0) then
+   max_state = swapstate
+else
+   max_state = NumStates
+endif
+
+print*, '*********max_state =************', max_state
+
+found_flag = 0
+state = max_state-1
+do while((found_flag.ne.2).and.(state.ne.0))
+!do state = NumStates-1, 1, -1
+   H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
+   L1_L2 = dabs(R1(state,1) - R2(state,1))
+   H2_L2 = dabs(R2(state+1,1)-R2(state,1))
+   S_H2L1 = dabs(R1(state,1) - R2(state+1,1))/dabs(deltaR)
+   S_L2L1 = dabs(R1(state,1) - R2(state,1))/dabs(deltaR)
+
+   if((nint(H1_H2).ne.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+   !if(((nint(H1_H2).ne.0).and.(nint(L1_L2).ne.0)).and.(S_H2L1.gt.S_L2L1)) then
+      print*, 'overwriting array for energy file'
+      tmp = tmp_nrg(state,1:tmp_size)
+      tmp_nrg(state,1:tmp_size) = tmp_nrg(state+1,1:tmp_size)
+      tmp_nrg(state+1,1:tmp_size) = tmp
+      print*, 'swapping Energies'
+      call swap(state, R1)
+      found_flag = found_flag+1
+      if(found_flag = 1) then !!need 2 swapstates if two are found to be able to swap psi
+         swapstate = state
+      endif
+   endif
+   state = state - 1
+enddo
+
+end subroutine Avoided_Crossings
+
+subroutine identify_crossings(slopes,nrg,RSteps, NumStates, R)
+
+integer RSteps, NumStates
+double precision comparison, slopes(RSteps, NumStates), nrg(Rsteps, NumStates), R(RSteps)
+
+do i = 40, RSteps-1 ! 40 corresponds to R(40)~12
+   do j = 3, NumStates-1
+      if ((dabs(slopes(i, j) - slopes(i+1, j+1)).le.(0.5)).and.(dabs(slopes(i, j) - slopes(i+1, j)).ge.(0.95))) then
+         write(75,*) i,R(i),j,j+1
+      endif
+      if (dabs(slopes(i+1,j)-slopes(i,j)).gt.dabs(slopes(i+1,j+1)-slopes(i,j))) then !/(nrg(i,j+1)-nrg(i,j)).gt. then
+         write(76,*) i,R(i),j,j+1
+      endif
+   enddo
+enddo
+
+end subroutine identify_crossings
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
@@ -729,11 +871,13 @@ contains
 !!!!!
 end subroutine calcCouplings_v2
 
-subroutine identify_crossings()
+subroutine swap_crossings()
 
-!loop over states until you find the one with the avoided crossing
+! need to swap appropriate values in Psi (matrixdim, ncv)
+! need to swap appropriate values in Energies (ncv, 2)
+! recalculate P and Q matrices (80 x 80)
 
-end subroutine identify_crossings
+end subroutine
 
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 
