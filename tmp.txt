@@ -77,18 +77,26 @@ program HHL1DHyperspherical
    TYPE(basis) LB
    TYPE(basis) RB
 
-  integer LegPoints,xNumPoints
+   double precision tmp, tmp1, tmp2, comp_value
+   integer row_tmp, col_tmp
+   integer imu, inu, found_flag
+
+
+  integer LegPoints,xNumPoints, newRow
   integer NumStates,PsiFlag,Order,Left,Right
-  integer RSteps,CouplingFlag
+  integer RSteps,CouplingFlag, CrossingFlag
   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
-  double precision xMin,xMax
+  double precision xMin,xMax, tmp_nrg
   double precision, allocatable :: R(:)
   double precision, allocatable :: xPoints(:)
+  double precision, allocatable :: slopes(:,:)
+  double precision, allocatable :: nrg(:,:), left_nrg(:,:), right_nrg(:,:), curr_nrg(:,:)
 
   logical, allocatable :: Select(:)
 
+  integer swapstate, swapstate2, max_state1, max_state2
   integer iparam(11),ncv,info
   integer i,j,k,iR,NumFirst,NumBound
   integer LeadDim,MatrixDim,HalfBandWidth
@@ -99,7 +107,7 @@ program HHL1DHyperspherical
   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
   double precision YVal_L,RVal_L, RVal_R
 
-
+  double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
@@ -109,6 +117,7 @@ program HHL1DHyperspherical
   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum
   character*64 LegendreFile
+  character*64 leftnrg
   common /Rvalue/ Rvalue      
   hbar = 1.054571817d-34
   amu = 1.660539d-27
@@ -194,6 +203,10 @@ program HHL1DHyperspherical
 !  XLast = dlog10(RLast)
 !  StepX=(XLast-XFirst)/(RSteps-1.d0)
 
+  allocate(slopes(RSteps,NumStates))
+  allocate(nrg(RSteps,NumStates))
+  allocate(left_nrg(RSteps,NumStates))
+  allocate(right_nrg(RSteps,NumStates))
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
   do i = 1,RSteps
@@ -220,7 +233,6 @@ program HHL1DHyperspherical
 
   allocate(S_lm(2*HalfBandWidth+1,xDim))
   allocate(S_mr(2*HalfBandWidth,xDim))
-
   TotalMemory = 2.0d0*(HalfBandWidth+1)*MatrixDim ! S, H
   TotalMemory = TotalMemory + 2.0d0*LegPoints*(Order+2)*xDim ! x splines
   TotalMemory = TotalMemory + 2.0d0*NumStates*NumStates ! P and Q matrices
@@ -243,6 +255,8 @@ program HHL1DHyperspherical
 
   ncv = 2*NumStates
   LeadDim = 3*HalfBandWidth+1
+  allocate(oldPsi(MatrixDim,ncv))
+  allocate(oldEnergies(ncv,2))
   allocate(iwork(MatrixDim))
   allocate(Select(ncv))
   allocate(LUFac(LeadDim,MatrixDim))
@@ -274,8 +288,27 @@ program HHL1DHyperspherical
 
   end if
 
+   open(unit = 200, file = "energies.dat")
+   open(unit = 201, file = "og_energies.dat")
+   open(unit = 101, file = "P_Matrix.dat")
+   open(unit = 102, file = "Q_Matrix.dat")
+   open(unit=11, file = "leftnrg.dat")
+
+   !open(unit=11,file=leftnrg(1:INDEX(leftnrg,' ')-1))
+   !open(unit=200,file=energies.dat(1:INDEX(energies.dat,' ')-1))
+   !open(unit=12,file=right_energies.dat(1:INDEX(right_energies.dat,' ')-1))
+
+   !open(unit = 1, file = "left_energies.dat")
+   !open(unit = 2, file = "right_energies.dat")
+
+ allocate(curr_nrg(RSteps,NumStates))
+ swapstate = 0
+ max_state1 = 79
+ max_state2 = 79
+  CrossingFlag = 0
   RChange=100.d0
-  do iR = RSteps,1,-1!RSteps
+  if (CrossingFlag.eq.0) then
+  do iR = RSteps,1,-1 !RSteps
      NumFirst=NumStates
      if (R(iR).gt.RChange) then
         NumFirst=NumBound
@@ -287,8 +320,6 @@ program HHL1DHyperspherical
       print*, 'Beginning iteration at iR = ', iR
       print*, 'Such that R(iR) = ', R(iR)
 
-      if (iR .eq. 99) stop
-
       !sNb = 1.d0/(dble(Nbs)*Pi + phi)
 
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
@@ -296,9 +327,6 @@ program HHL1DHyperspherical
       !write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
       
       print*, 'calling GridMaker.'
-
-      !xMin = theta_c + dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! Now using small-angle approximation
-      !xMax = Pi + theta_c - dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) ! ''
 
       if (CouplingFlag .eq. 0) then
      xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
@@ -313,12 +341,6 @@ program HHL1DHyperspherical
      print*, 'Using xMin = ', xMin
      print*, 'Using xMax = ', xMax
 
-   !   print*, 'dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho) = ', dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)
-
-   !    sbc = (sNb/RLeft)*R(iR)
-
-   !    print*, 'sbc using sbc = (sNb/RLeft)*R(iR):', sbc
-
       sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c)
 
       print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
@@ -329,10 +351,12 @@ program HHL1DHyperspherical
      endif
      call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
         print*, 'done... Calculating Primitive Basis Functions'
+         tmp_alpha = 1
+         tmp_beta = 1
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
-         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta)
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta,.false.)
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
-         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx, tmp_alpha, tmp_beta)
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx, tmp_alpha, tmp_beta,.false.)
      print*, 'done... Calculating overlap matrix'
      !     must move this block inside the loop if the grid is adaptive
      !----------------------------------------------------------------------------------------
@@ -344,19 +368,18 @@ program HHL1DHyperspherical
 
       YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
       RVal_L = 1.d0/YVal_L
+      !RVal_L = 0d0
       RVal_R = -RVal_L
 
      write(6,*) 'Center Basis YVal_L = ', YVal_L
      write(6,*) 'Center Basis RVal_L = ', RVal_L
 
-      call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta)
+     call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
+     xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta, .true.)
+
+      call calc_Physical_Set(CB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
          write(6,*) 'CB%alpha (u) = ', CB%alpha
          write(6,*) 'CB%beta (u) = ', CB%beta
-      call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx, CB%alpha, CB%beta)
-         write(6,*) 'CB%alpha (uxx) = ', CB%alpha
-         write(6,*) 'CB%beta (uxx) = ', CB%beta
 
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
 
@@ -364,19 +387,62 @@ program HHL1DHyperspherical
       
         call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
              LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
-        !            call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,rPsi,
-        !     >           Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
-        !            call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,NumStates,lPsi,rPsi)
         call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
              NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
-        !call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,mPsi,mPsi) !
+
+         if(iR .ne. RSteps) then
+            comp_value = ((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046
+            !print*, '((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046 ',((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046
+            !stop
+            do i = 1, NumStates
+               curr_nrg(iR,i) = CB%Energies(i,1)
+            enddo
+            write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !store non-adiabatized values for reference
+            found_flag = 0
+            call Avoided_Crossings(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1),&
+            NumStates,(R(iR+1)-R(iR)), swapstate,found_flag, comp_value, max_state1)!changes curr_nrg and CB%energies
+            if (found_flag.eq.1) then
+               call swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+               ! do i = iR, RSteps
+               !    tmp_nrg = curr_nrg(i,swapstate)
+               !    curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+               !    curr_nrg(i,swapstate+1) = tmp_nrg
+               ! enddo
+            endif
+            ! call Avoided_Crossings2(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1),&
+            ! NumStates,(R(iR+1)-R(iR)), swapstate2,found_flag, comp_value, max_state2)!changes curr_nrg and CB%energies
+            ! if (found_flag.eq.1) then
+            !    call swap_full(curr_nrg, swapstate2, iR, RSteps, NumStates)
+            !    ! do i = iR, RSteps
+            !    !    tmp_nrg = curr_nrg(i,swapstate2)
+            !    !    curr_nrg(i,swapstate2) = curr_nrg(i, swapstate2+1)
+            !    !    curr_nrg(i,swapstate2+1) = tmp_nrg
+            !    ! enddo
+            ! endif
+
+         else
+            do i = 1, NumStates
+               curr_nrg(iR,i) = CB%Energies(i,1)
+               write(201, 20) R(iR), CB%Energies(i,1)
+            enddo
+            !write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
+         endif
+         oldEnergies = CB%Energies !!declare oldEnergies
+         
+         !write(200,20) R(iR), (curr_nrg(i,1), i = 1,NumStates)
+
+         !Fix psis here :o
+
+         if(iR .ne. RSteps) then
+            call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
+         endif
+         oldPsi = CB%Psi
+
         call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
+
 !!!!!!!!!
 
      if (CouplingFlag .ne. 0) then
-        ! Inside this IF block we must have:
-        ! 1) Construction of the physical basis set at the left and right point
-        ! 2) ???
 
 !******** CONSTRUCTION OF LEFT BASIS SETS ********
 
@@ -392,15 +458,12 @@ program HHL1DHyperspherical
       write(6,*) 'Left basis RVal_L = ', RVal_L
 
       !!Recompute kleft and kright at each triade
-      
-      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_L, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,0,LB%u,&
-       LB%alpha, LB%beta)
+
+      LB%xBounds = CB%xBounds
+
+      call calc_Physical_Set(LB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
          write(6,*) 'LB%alpha (u) = ', LB%alpha
          write(6,*) 'LB%beta (u) = ', LB%beta
-      call CalcBasisFuncsBP(LB%Left,LB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,LB%xDim,LB%xBounds,xNumPoints,2,LB%uxx,&
-       LB%alpha, LB%beta)
-         write(6,*) 'LB%alpha (uxx) = ', LB%alpha
-         write(6,*) 'LB%beta (uxx) = ', LB%beta
       
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%xBounds,HalfBandWidth,LB%S)
 
@@ -424,14 +487,11 @@ program HHL1DHyperspherical
      write(6,*) 'Right Basis YVal_L = ', YVal_L
      write(6,*) 'Right basis RVal_L = ', RVal_L
 
-      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,0,RB%u,&
-      RB%alpha, RB%beta)
+     RB%xBounds = CB%xBounds
+
+      call calc_Physical_Set(RB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
          write(6,*) 'RB%alpha (u) = ', RB%alpha
          write(6,*) 'RB%beta (u) = ', RB%beta
-      call CalcBasisFuncsBP(RB%Left,RB%Right, RVal_L, RVal_R, Order,xPoints,LegPoints,xLeg,RB%xDim,RB%xBounds,xNumPoints,2,RB%uxx,&
-      RB%alpha, RB%beta)
-         write(6,*) 'RB%alpha (uxx) = ', RB%alpha
-         write(6,*) 'RB%beta (uxx) = ', RB%beta
 
       call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%xBounds,HalfBandWidth,RB%S)
 
@@ -445,39 +505,32 @@ program HHL1DHyperspherical
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+write(6,*) 'writing the energies'
+
+   !   if (CouplingFlag .eq. 1) write(12,20) (RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   write(200,20) (CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   if (CouplingFlag .eq. 1) write(11,20) (LB%Energies(i,1), i = 1,NumStates)
+   !   write(201,20) iR*1.0d0,(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+   !   write(202,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   subroutine calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+
+        write(101,*) R(iR)
+        write(102,*) R(iR)
+        !write(103,*) R(iR)
+        do i = 1,min(NumStates,iparam(5))
+           write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
+           write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
+           !write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
+        enddo
+         write(107,*) 'Shape(P): ', Shape(P)
+         write(107,*) 'Shape(Q): ', Shape(Q)
 
    endif
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-!!     !write(6,*) 'Calling MyLargeDsband'
-!!$c     call MyLargeDsband(NumFirst,Shift2,NumStateInc,Energies,mPsi,
-!!$c     >        Shift,MatrixDim,H,S,LUFac,LeadDim,HalfBandWidth,NumStates)
-!!$c     write(6,*) 'done...'
-!!$c     if (CouplingFlag .ne. 0) then
-!!$c     if(iR.gt.1) then
-!!$c     write(6,*) 'Calling FixPhase'
-!!$c     call FixPhase(NumStates,HalfBandWidth,MatrixDim,S,NumStates,rPsi,mPsi)
-!!$c     endif
-!!$c     endif
-
-   !   call MyDsband(Select,Energies,mPsi,MatrixDim,Shift,MatrixDim,&
-   !        PB%H,PB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,NumStates,&
-   !        Tol,Residuals,ncv,mPsi,MatrixDim,iparam,workd,workl,&
-   !        ncv*ncv+8*ncv,iwork,info)
-   !   if (CouplingFlag .ne. 0) call FixPhase(NumStates,HalfBandWidth,&
-   !        MatrixDim,PB%S,ncv,rPsi,mPsi)
-
-   !   call CalcEigenErrors(info,iparam,MatrixDim,PB%H,HalfBandWidth+1,PB%S,&
-   !        HalfBandWidth,NumStates,mPsi,Energies,ncv)
-
-     write(6,*) 'writing the energies'
-     if (CouplingFlag .eq. 1) write(200,20) RRight,(RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     write(200,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-     if (CouplingFlag .eq. 1) write(200,20) RLeft,(LB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -492,27 +545,9 @@ program HHL1DHyperspherical
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
-     endif         
+     endif
 
-!!TODO: COUPLING MATRICES
-
-      ! if (CouplingFlag .ne. 0) then
-      !    call calcCoupling2_0(NumStates, RDerivDelt, LB%Psi, CB%Psi, RB%Psi, CB%alpha, CB%beta, RB%alpha, RB%beta, CB%S)
-      ! endif
-
-   !   if (CouplingFlag .ne. 0) then
-   !      call CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDerivDelt,lPsi,mPsi,rPsi,S,P,Q,dP) !!!FIX THIS
-
-   !      write(101,*) R(iR)
-   !      write(102,*) R(iR)
-   !      write(103,*) R(iR)
-   !      do i = 1,min(NumStates,iparam(5))
-   !         write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
-   !         write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
-   !         write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
-   !      enddo
-   !   endif
-   !         write(400,20) R(iR),R(iR)**3.0d0*(Energies(2,1)-Q(2,2))
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      
      if (PsiFlag .ne. 0) then
         do i = 1,xNumPoints
@@ -524,17 +559,43 @@ program HHL1DHyperspherical
         close(unit=999+iR)
      endif
 
+   ! print*, 'shape(CB%energies)', shape(CB%energies)
+   ! print*, 'CB%energies(1,1)', CB%energies(1,1)
+   ! print*, 'CB%energies(80,1)', CB%energies(80,1)
+   ! print*, 'CB%energies(81,1)', CB%energies(81,1)
+
   enddo
 
+   do iR = RSteps, 1, -1
+      write(200,20) R(iR),(curr_nrg(iR, j), j=1,NumStates)
+      !read(11,*) (left_nrg(iR,j), j = 1,NumStates)
+      !read(12,*) (right_nrg(iR,j), j = 1,NumStates)
+      !read(200,*) (nrg(iR,j), j = 1,NumStates)
+   enddo
+
+   endif
+
+   do iR = RSteps, 1, -1
+      read(201,*) (nrg(iR,j), j = 1,NumStates)
+   enddo
+
+   ! do iR = 1, RSteps
+   !    do i = 1, NumStates
+   !       slopes(iR,i) = (right_nrg(iR,i)-left_nrg(iR,i))/((R(iR)+RDerivDelt)-(R(iR)-RDerivDelt)) !Stores slope of each triad
+   !    enddo
+   ! enddo
+
+   close(11)
+   close(200)
+
+   call identify_crossings(slopes, nrg, RSteps, NumStates, R)
+
   deallocate(S_lm, S_mr)
-  !deallocate(S,H)
-  !deallocate(Energies)
   deallocate(iwork)
   deallocate(Select)
   deallocate(LUFac)
   deallocate(workl)
   deallocate(workd)
-  !deallocate(lPsi,mPsi,rPsi)
   deallocate(Residuals)
   deallocate(P,Q,dP)
   deallocate(xPoints)
@@ -554,221 +615,547 @@ program HHL1DHyperspherical
   stop
 end program HHL1DHyperspherical
 
+subroutine find_crossings(nrg, RSteps, NumStates, RSteps)
+implicit none
+double precision nrg(RSteps, NumStates), crossings(RSteps,2)
+integer RSteps, NumStates, found_flag
+
+subroutine Avoided_Crossings2(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate,found_flag, comp_value,max_state)
+
+do i = RSteps-1, 1, -1
+   crossings(i,1) = i
+   call Avoided_Crossings(nrg(i), nrg(i+1),)
+   if found_flag = 1
+      then crossings(i,2) = swapstate
+   endif
+enddo
+enddo
+
+end subroutine find_crossings
+
+subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+implicit none
+double precision curr_nrg(RSteps, NumStates), tmp_nrg
+integer swapstate, iR, RSteps, NumStates, i
+do i = iR, RSteps
+   tmp_nrg = curr_nrg(i,swapstate)
+   curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+   curr_nrg(i,swapstate+1) = tmp_nrg
+enddo
+end subroutine swap_full
+
+subroutine swap(swapstate, energy_array)
+implicit none
+double precision energy_array(80,2)
+integer swapstate, tmp, i
+
+do i = 1,2 !swaps each energy and it's derivative
+   tmp = energy_array(swapstate,i)
+   energy_array(swapstate,i) = energy_array(swapstate+1,i)
+   energy_array(swapstate+1,i) = tmp
+enddo
+
+end subroutine swap
+
+subroutine Avoided_Crossings(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate,found_flag, comp_value,max_state)
+implicit none
+double precision R1(NumStates,2), R2(NumStates,2), tmp_nrg(NumStates,tmp_size), tmp(tmp_size)
+double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2, comp_value
+integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state
+
+print*, '*********max_state =************', max_state
+
+found_flag = 0
+!state = max_state-1
+state = max_state
+do while((found_flag.ne.1).and.(state.ne.0))
+!do state = NumStates-1, 1, -1
+   H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
+   L1_L2 = dabs(R1(state,1) - R2(state,1))
+   H2_L2 = dabs(R2(state+1,1)-R2(state,1))
+   S_H2L1 = dabs(R1(state,1) - R2(state+1,1))/dabs(deltaR)
+   S_L2L1 = dabs(R1(state,1) - R2(state,1))/dabs(deltaR)
+
+   !if((nint(H1_H2).eq.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+   !if((nint(H1_H2).ne.nint(L1_L2)).and.(S_H2L1.gt.S_L2L1)) then
+   !print*, 'LOOKING FOR VALUE NEAR: ', comp_value
+   !if (nint(comp_value).eq.nint(R2(state,1))) then
+   if((nint(H1_H2).eq.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+      print*, 'State = ', state
+      print*, 'nint(comp_value) = ', nint(comp_value)
+      print*, 'nint(R2(state,1)) = ', nint(R2(state,1))
+      max_state = state
+      found_flag = found_flag+1
+      if(found_flag.eq.1) then !!need 2 swapstates if two are found to be able to swap psi
+         swapstate = state
+      endif
+      call swap(state, R1)
+   endif
+   state = state - 1
+enddo
+end subroutine Avoided_Crossings
+
+subroutine Avoided_Crossings2(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate,found_flag, comp_value,max_state)
+implicit none
+double precision R1(NumStates,2), R2(NumStates,2), tmp_nrg(NumStates,tmp_size), tmp(tmp_size)
+double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2, comp_value
+integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state
+
+print*, '*********max_state =************', max_state
+
+found_flag = 0
+!state = max_state-1
+state = max_state
+do while((found_flag.ne.1).and.(state.ne.0))
+!do state = NumStates-1, 1, -1
+   H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
+   L1_L2 = dabs(R1(state,1) - R2(state,1))
+   H2_L2 = dabs(R2(state+1,1)-R2(state,1))
+   S_H2L1 = dabs(R1(state,1) - R2(state+1,1))/dabs(deltaR)
+   S_L2L1 = dabs(R1(state,1) - R2(state,1))/dabs(deltaR)
+
+   !if((nint(H1_H2).eq.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+   !if((nint(H1_H2).ne.nint(L1_L2)).and.(S_H2L1.gt.S_L2L1)) then
+   print*, 'LOOKING FOR VALUE NEAR: ', comp_value
+   if (nint(comp_value).eq.nint(R2(state,1))) then
+      print*, 'State = ', state
+      print*, 'nint(comp_value) = ', nint(comp_value)
+      print*, 'nint(R2(state,1)) = ', nint(R2(state,1))
+      max_state = state
+      found_flag = found_flag+1
+      if(found_flag.eq.1) then !!need 2 swapstates if two are found to be able to swap psi
+         swapstate = state
+      endif
+      call swap(state, R1)
+   endif
+   state = state - 1
+enddo
+
+end subroutine Avoided_Crossings2
+
+subroutine identify_crossings(slopes,nrg,RSteps, NumStates, R)
+
+integer RSteps, NumStates
+double precision comparison, slopes(RSteps, NumStates), nrg(Rsteps, NumStates), R(RSteps)
+
+do i = 40, RSteps-1 ! 40 corresponds to R(40)~12
+   do j = 3, NumStates-1
+      if ((dabs(slopes(i, j) - slopes(i+1, j+1)).le.(0.5)).and.(dabs(slopes(i, j) - slopes(i+1, j)).ge.(0.95))) then
+         write(75,*) i,R(i),j,j+1
+      endif
+      if (dabs(slopes(i+1,j)-slopes(i,j)).gt.dabs(slopes(i+1,j+1)-slopes(i,j))) then !/(nrg(i,j+1)-nrg(i,j)).gt. then
+         write(76,*) i,R(i),j,j+1
+      endif
+   enddo
+enddo
+
+end subroutine identify_crossings
+
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
+      implicit none
+      integer NumStates,HalfBandWidth,MatrixDim
+      double precision RDelt
+      double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
+      double precision S(HalfBandWidth+1,MatrixDim),testorth
+      double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
+
+      integer i,j,k
+      double precision aP,aQ,ddot
+      double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
+      double precision, allocatable :: TempmPsi(:)
+
+      allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
+      TempPsiB(MatrixDim),rSumPsi(MatrixDim))
+      allocate(TempmPsi(MatrixDim))
+
+      aP = 0.5d0/RDelt
+      aQ = aP*aP
+
+      do j = 1,NumStates
+         do k = 1,MatrixDim
+            rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
+            rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)
+!            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
+!            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
+         enddo
+         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
+         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
+         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
+
+         do i = 1,NumStates
+
+!            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
+!            write(309,*) i,j, '   testorth=',testorth
+
+            P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1)
+            dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
+
+            do k = 1,MatrixDim
+               lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
+            enddo
+            Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1)
+         enddo
+      enddo
+
+      do j=1,NumStates
+	 do i=j,NumStates
+            dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
+            dP(j,i)=-dP(i,j)
+	 enddo
+      enddo
+
+      deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
+
+      return
+      end
+!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
 !!!!!!!!!!!!!!!!!!!!!! (LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+
+subroutine calc_Physical_Set(b, pb,RVal_L,RVal_R,Order, xNumPoints, xPoints)
+use BasisSets
+implicit none
+double precision, external :: calc_alpha, calc_beta
+integer Order, xNumPoints
+double precision RVal_L, RVal_R, xPoints(xNumPoints)
+TYPE(basis) b, pb
+!!REVISIT FOR cases other than L,R = 3,3
+
+b%alpha = calc_alpha(b, RVal_L, Order, xNumPoints, xPoints)
+b%beta = calc_beta(b, RVal_R, Order, xNumPoints, xPoints)
+
+b%u(:,:,1) = b%alpha*pb%u(:,:,1)+pb%u(:,:,2)
+b%uxx(:,:,1) = b%alpha*pb%uxx(:,:,1)+pb%uxx(:,:,2)
+
+b%u(:,:,b%xDim) = pb%u(:,:,pb%xDim-1)+b%beta*pb%u(:,:,pb%xDim)
+b%uxx(:,:,b%xDim) = pb%uxx(:,:,pb%xDim-1)+b%beta*pb%uxx(:,:,pb%xDim)
+
+b%u(:,:,2:b%xDim-1) = pb%u(:,:,3:pb%xDim-2)
+b%uxx(:,:,2:b%xDim-1) = pb%uxx(:,:,3:pb%xDim-2)
+
+end subroutine calc_Physical_Set
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+double precision function calc_alpha(B, RVal_L, Order, xNumPoints, xPoints)
+use BasisSets
+implicit none
+TYPE(basis) B
+integer Order, xNumPoints
+double precision RVal_L,xPoints(xNumPoints)
+double precision, external :: MYBSpline
+
+calc_alpha = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))*RVal_L&
+- MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)))&
+/(MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))&
+-MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1))*RVal_L)
+
+end function calc_alpha
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+double precision function calc_beta(B, RVal_R, Order, xNumPoints, xPoints)
+use BasisSets
+implicit none
+TYPE(basis) B
+integer Order, xNumPoints
+double precision RVal_R, xPoints(xNumPoints)
+double precision, external :: MYBSpline
+
+calc_beta = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*RVal_R&
+-MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)))&
+/(MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))&
+- MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*RVal_R)
+
+end function calc_beta
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine calcCouplings_v2(LB, CB, RB, P, Q, S_prim, HalfBandWidth, NumStates, RDerivDelt)
 
-! use BasisSets
+ use BasisSets
 
-! TYPE(BASIS) LB, CB, RB
-! double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2)
-! integer HalfBandWidth
+ implicit none
 
-! integer mu, nu
+ TYPE(basis) LB, CB, RB
+ double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
+ integer HalfBandWidth, NumStates
+ integer ct
 
-! !P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
+ integer mu, nu, N_
+ double precision P_term_1, Q_term_1, Q_term_2
 
-! do mu = 1, NumStates
-!    do nu = 1, NumStates
-!       P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-!       P(mu,nu) = 1/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
-!    enddo
-! enddo
+ N_ = CB%xDim+2
 
-! contains
+!P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
 
-! double precision function kronecker_delta(m,n)
-!       integer m,n
-!       if (m .eq. n) then
-!          kronecker_delta = 1
-!       else
-!          kronecker_delta = 0
-!       endif
-!    end function kronecker_delta
+print*, 'Calculating P matrix...'
 
-! double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth) !function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth)
+do mu = 1, NumStates
+   do nu = 1, NumStates
+      P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      P(mu,nu) = 1d0/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
+   enddo
+enddo
 
-! integer mu, nu, HalfBandWidth
-! double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2)
-! TYPE(BASIS) CB, RB
+ct = 0
 
-! do i = 1, xDim
-!    do j = 1, xDim
-!       S_ij = calc_overlap_elem(i,j, CB%alpha, RB%alpha, CB%beta, RB%beta, S_prim, HalfBandWidth)
-!       term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
-!    enddo
-! enddo
+print*, 'Done Calculating P Matrix!'
 
-! end function calc_P_term_1
+!Q(mu,nu) = 1/RDerivDelt**2 * (Q_term_1(mu,nu) + Q_term_2(mu,nu) - 2*kronecker_delta)
 
-! !!!!!
+print*, 'Calculating Q matrix...'
 
-! double precision function banded_zeros_check(row,col,HalfBandWidth,S)
-!       integer row, col, HalfBandWidth, newRow
-!       double precision :: S(:,:)
+do mu = 1, NumStates
+   do nu = 1, NumStates
+      Q_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      !Q_term_2 = calc_P_term_1(mu,nu, LB, CB, S_prim, HalfBandWidth) !! double check this
+      Q_term_2 = calc_P_term_1(mu,nu, CB, LB, S_prim, HalfBandWidth)
+      Q(mu,nu) = 1d0/RDerivDelt**2 * (Q_term_1+Q_term_2-2*kronecker_delta(mu,nu))
+   enddo
+enddo
 
-!       if ((row .lt. col).or.(row+HalfBandWidth .gt. col)) then
-!          banded_zeros_check = 0
-!       else
-!          newRow = HalfBandWidth + 1 + (row - col)
-!          banded_zeros_check = S(newRow, col)
-!       endif
+ct = 0
 
-!    end function banded_zeros_check
+print*, 'Done Calculating Q Matrix!'
 
-!    double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
+contains
 
-!    integer m,n, HalfBandWidth, row, column, term_1, term_2, term_3, term_4, testing
-!    double precision m_alpha, r_alpha, m_beta, r_beta, S_prim(:,:)
+   double precision function kronecker_delta(m,n)
+   implicit none
+         integer m,n
+         if (m .eq. n) then
+            kronecker_delta = 1
+         else
+            kronecker_delta = 0
+         endif
+      end function kronecker_delta
 
-!    print*, 'passing in (m,n) = ', m, n
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   
+   double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+      implicit none
+      integer mu, nu, HalfBandWidth, i, j
+      TYPE(BASIS) CB, RB
+      double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
 
-!          if ((m .gt. 1).and.(m .lt. N_)) then
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = S_prim(row+1,column+1)
-!                row = m+1
-!                column = n+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      term_1_mu_nu = 0d0
 
-!                calc_overlap_elem = term_1
+      do i = 1, CB%xDim
+         do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
+            call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
+            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
+         enddo
+      enddo
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = r_alpha*S_prim(1,row+1) + S_prim(2,row+1)
-!                row = 1
-!                column = row + 1
-!                term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      !print*, 'mu,nu, term_1_mu_nu = ', mu,nu, term_1_mu_nu
 
-!                row = 2
-!                column = row + 1
-!                term_2 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      calc_P_term_1 = term_1_mu_nu
+      !stop
+   end function calc_P_term_1
+!!!!!
+end subroutine calcCouplings_v2
 
-!                calc_overlap_elem = term_1 + term_2
+subroutine swap_crossings()
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
-!                row = m + 1
-!                column = N_+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+! need to swap appropriate values in Psi (matrixdim, ncv)
+! need to swap appropriate values in Energies (ncv, 2)
+! recalculate P and Q matrices (80 x 80)
 
-!                row = m + 1
-!                column = N_+2
-!                term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+end subroutine
 
-!                calc_overlap_elem = term_1 + term_2
+subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 
-!             endif
+   use BasisSets
 
-!          else if (m .eq. 1) then
+   implicit none
 
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
-!                row = 1
-!                column = n+1
-!                term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+   TYPE(basis) u, ur
 
-!                row = 2
-!                column = n+1
-!                term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+!   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
+   integer m,n, HalfBandWidth, row, column, tmp
+   double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
+   S_mn, term_1, term_2, term_3, term_4, testing
 
-!                calc_overlap_elem = term_1 + term_2
+   !N_ = u%xDim+2
+   N_ = u%xDim
+   m_alpha = u%alpha
+   r_alpha = ur%alpha
+   m_beta = u%beta
+   r_beta = ur%beta
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
-!                row = 1
-!                column = 1
-!                term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+         if ((m .gt. 1).and.(m .lt. N_)) then
+            if ((n .gt. 1).and.(n .lt. N_)) then
+            !print*, 'case 1'
+               row = m+1
+               column = n+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               S_mn = term_1
 
-!                row = 1
-!                column = 2
-!                term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+            else if (n .eq. 1) then !problem case
+               !calc_overlap_elem = r_alpha*S_prim(1,m+1) + S_prim(2,m+1)
+            !print*, 'case 2'
+               row = 1
+               column = m + 1
+               term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = 1
-!                term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = 2
+               column = m + 1
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = 2
-!                term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               S_mn = term_1 + term_2
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+            else if (n .eq. N_) then
+            !print*, 'case 3: m,n ',m,n
+               !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
+               row = m + 1
+               column = N_+1
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
-!                row = 1
-!                column = N_+1
-!                term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 1
-!                column = N_+2
-!                term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = m + 1
+               column = N_+2
+               term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = 2
-!                column = N_+1
-!                term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               S_mn = term_1 + term_2
 
-!                row = 2
-!                column = N_+2
-!                term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+            endif
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+         else if (m .eq. 1) then
 
-!             endif
+            if ((n .gt. 1).and.(n .lt. N_)) then !problem case
+               !print*, 'case 4'
+               !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
+               row = 1
+               column = n+1
+               term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!          else if(m .eq. N) then
+               row = 2
+               column = n+1
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             if ((n .gt. 1).and.(n .lt. N_)) then
-!                !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
-!                row = N_+1
-!                column = n+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               S_mn = term_1 + term_2
 
-!                row = N_+2
-!                column = n+1
-!                term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+            else if (n .eq. 1) then
+               !print*, 'case 5'
+               !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
+               row = 1
+               column = 1
+               term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                calc_overlap_elem = term_1+term_2
+               row = 1
+               column = 2
+               term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!             else if (n .eq. 1) then
-!                !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
-!                row = N_+1
-!                column = 1
-!                term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = 2
+               column = 1
+               term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = N_+2
-!                column = 2
-!                term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               row = 2
+               column = 2
+               term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-!                row = N_+2
-!                column = 1
-!                term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+               S_mn = term_1+term_2+term_3+term_4
 
-!                row = N_+2
-!                column = 2
-!                term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+            else if (n .eq. N_) then
+               !print*, 'case 6'
+               !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
+               row = 1
+               column = N_+1
+               term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!                calc_overlap_elem = term_1+term_2+term_3+term_4
+               row = 1
+               column = N_+2
+               term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-!             else if (n .eq. N_) then
-!                !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
-!                row = N_+1
-!                column = N_+1
-!                term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+               row = 2
+               column = N_+1
+               term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = 2
+               column = N_+2
+               term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               S_mn = term_1+term_2+term_3+term_4
+
+            endif
+
+         else if(m .eq. N_) then
+
+            if ((n .gt. 1).and.(n .lt. N_)) then
+               !print*, 'case 7'
+               !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
+               row = N_+1
+               column = n+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               row = N_+2
+               column = n+1
+               term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+
+               S_mn = term_1+term_2
+
+            else if (n .eq. 1) then
+               !print*, 'case 8'
+               !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
+               row = N_+1
+               column = 1
+               term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 2
+               term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 1
+               term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               row = N_+2
+               column = 2
+               term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+
+               S_mn = term_1+term_2+term_3+term_4
+
+            else if (n .eq. N_) then
+               !print*, 'case 9'
+               !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
+               row = N_+1
+               column = N_+1
+               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
                
-!                row = N_+1
-!                column = N_+2
-!                term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
+               row = N_+1
+               column = N_+2
+               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
 
-!                row = N_+2
-!                column = N_+2
-!                term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+               row = N_+2
+               column = N_+2
+               term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
 
-!                calc_overlap_elem = term_1+term_2+term_3
+               S_mn = term_1+term_2+term_3
 
-!             endif
-!          endif
-!       end function calc_overlap_elem
+            endif
+         endif
 
-end subroutine calc_Couplings_v2
+contains
+
+   double precision function banded_zeros_check(row,col,HalfBandWidth,S_prim)
+   implicit none
+         integer row, col, HalfBandWidth, newRow, tmp
+         double precision S_prim(:,:)
+         
+         if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
+             banded_zeros_check = 0d0
+         else
+            if(row .gt. col) then
+               tmp = row
+               row = col
+               col = tmp
+            endif
+            newRow = HalfBandWidth + 1 + (row - col)
+            banded_zeros_check = S_prim(newRow, col)
+         endif
+
+   end function banded_zeros_check
+
+end subroutine calc_overlap_elem
 
 !!!!!!!!!!!!!!!!!!!!!!
 
@@ -1483,5 +1870,6 @@ end subroutine CalcEigenErrors
 !!$c$$$      enddo
 !!$c$$$      end
 !!$         
+
 
 

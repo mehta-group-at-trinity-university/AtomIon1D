@@ -77,9 +77,9 @@ program HHL1DHyperspherical
    TYPE(basis) LB
    TYPE(basis) RB
 
-   double precision tmp, tmp1, tmp2
+   double precision tmp, tmp1, tmp2, comp_value
    integer row_tmp, col_tmp
-   integer imu, inu
+   integer imu, inu, found_flag
 
 
   integer LegPoints,xNumPoints, newRow
@@ -88,11 +88,11 @@ program HHL1DHyperspherical
   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
   double precision RLeft,RRight,RDerivDelt,DD,L
   DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
-  double precision xMin,xMax
+  double precision xMin,xMax, tmp_nrg
   double precision, allocatable :: R(:)
   double precision, allocatable :: xPoints(:)
   double precision, allocatable :: slopes(:,:)
-  double precision, allocatable :: nrg(:,:), left_nrg(:,:), right_nrg(:,:), tmp_nrg(:,:), curr_nrg(:,:)
+  double precision, allocatable :: nrg(:,:), left_nrg(:,:), right_nrg(:,:), curr_nrg(:,:)
 
   logical, allocatable :: Select(:)
 
@@ -289,6 +289,7 @@ program HHL1DHyperspherical
   end if
 
    open(unit = 200, file = "energies.dat")
+   open(unit = 201, file = "og_energies.dat")
    open(unit = 101, file = "P_Matrix.dat")
    open(unit = 102, file = "Q_Matrix.dat")
    open(unit=11, file = "leftnrg.dat")
@@ -300,6 +301,8 @@ program HHL1DHyperspherical
    !open(unit = 1, file = "left_energies.dat")
    !open(unit = 2, file = "right_energies.dat")
 
+ allocate(curr_nrg(RSteps,NumStates))
+ swapstate = 0
   CrossingFlag = 0
   RChange=100.d0
   if (CrossingFlag.eq.0) then
@@ -386,35 +389,38 @@ program HHL1DHyperspherical
              NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
 
          if(iR .ne. RSteps) then
-            allocate(curr_nrg(NumStates, RSteps-iR+1))
-            do i=1, NumStates !populate after MyDSBand
-               do j=1, RSteps-iR
-                  curr_nrg(i,j+1) = tmp_nrg(i,j)
-               enddo
-               curr_nrg(i,1)=CB%energies(i,1) ! new energies in first column
-            enddo
-            deallocate(tmp_nrg)
-            do i=1, NumStates !populate after MyDSBand
-               do j=1, RSteps-iR
-               enddo
-            enddo
-            call Avoided_Crossings(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1), NumStates,(R(iR+1)-R(iR)), swapstate)!changes curr_nrg and CB%energies
-            allocate(tmp_nrg(NumStates, RSteps-iR+1)) !new tmp_nrg to be used in next iteration
-            do i=1, NumStates
-               do j=1, RSteps-iR+1
-                 tmp_nrg(i,j) = curr_nrg(i,j)
-               enddo
-            enddo
-            deallocate(curr_nrg)
-         else
-            allocate(tmp_nrg(NumStates, 1))
+            if(iR.le.97) then !!For some reason comp_value here is always being set to 100??
+               comp_value = ((mu/2)*R(iR+3)**2)*COS(theta_C)**2-13.42087120307046
+            else
+               comp_value = 100
+            endif
+            !print*, '((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046 ',((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046
+            !stop
             do i = 1, NumStates
-               tmp_nrg(i,1) = CB%Energies(i,1)
+               curr_nrg(iR,i) = CB%Energies(i,1)
             enddo
+            write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !store non-adiabatized values for reference
+            found_flag = 0
+            call Avoided_Crossings(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1),&
+            NumStates,(R(iR+1)-R(iR)), swapstate,found_flag, comp_value)!changes curr_nrg and CB%energies
+            if (found_flag.eq.1) then
+               do i = iR, RSteps
+                  tmp_nrg = curr_nrg(i,swapstate)
+                  curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+                  curr_nrg(i,swapstate+1) = tmp_nrg
+               enddo
+            endif
+            call subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+         else
+            do i = 1, NumStates
+               curr_nrg(iR,i) = CB%Energies(i,1)
+               write(201, 20) R(iR), CB%Energies(i,1)
+            enddo
+            !write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
          endif
          oldEnergies = CB%Energies !!declare oldEnergies
          
-         write(200,20) R(iR), (tmp_nrg(i,1), i = 1,NumStates)
+         !write(200,20) R(iR), (curr_nrg(i,1), i = 1,NumStates)
 
          !Fix psis here :o
 
@@ -552,11 +558,12 @@ write(6,*) 'writing the energies'
   enddo
   endif
 
-   !do iR = 1, RSteps
+   do iR = RSteps, 1, -1
+      write(200,20) R(iR),(curr_nrg(iR, j), j=1,NumStates)
       !read(11,*) (left_nrg(iR,j), j = 1,NumStates)
       !read(12,*) (right_nrg(iR,j), j = 1,NumStates)
       !read(200,*) (nrg(iR,j), j = 1,NumStates)
-   !enddo
+   enddo
 
    do iR = 1, RSteps
       do i = 1, NumStates
@@ -566,7 +573,6 @@ write(6,*) 'writing the energies'
 
    close(11)
    close(200)
-   deallocate(tmp_nrg)
 
    call identify_crossings(slopes, nrg, RSteps, NumStates, R)
 
@@ -594,7 +600,18 @@ write(6,*) 'writing the energies'
 
   stop
 end program HHL1DHyperspherical
-!!!!!!!!!! Avoided_Crossings(CB%Energies,oldEnergies, tmp_nrg, (RSteps-iR), NumStates,(R(iR+1)-R(iR)))
+
+subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+implicit none
+double precision curr_nrg(RSteps, NumStates), tmp_nrg
+integer swapstate, iR, RSteps, NumStates, i
+do i = iR, RSteps
+   tmp_nrg = curr_nrg(i,swapstate)
+   curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+   curr_nrg(i,swapstate+1) = tmp_nrg
+enddo
+end subroutine swap_full
+
 subroutine swap(swapstate, energy_array)
 implicit none
 double precision energy_array(80,2)
@@ -608,10 +625,10 @@ enddo
 
 end subroutine swap
 
-subroutine Avoided_Crossings(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate)
+subroutine Avoided_Crossings(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate,found_flag, comp_value)
 implicit none
 double precision R1(NumStates,2), R2(NumStates,2), tmp_nrg(NumStates,tmp_size), tmp(tmp_size)
-double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2
+double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2, comp_value
 integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state
 
 if(swapstate.ne.0) then
@@ -624,7 +641,7 @@ print*, '*********max_state =************', max_state
 
 found_flag = 0
 state = max_state-1
-do while((found_flag.ne.2).and.(state.ne.0))
+do while((found_flag.ne.1).and.(state.ne.0))
 !do state = NumStates-1, 1, -1
    H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
    L1_L2 = dabs(R1(state,1) - R2(state,1))
@@ -632,18 +649,29 @@ do while((found_flag.ne.2).and.(state.ne.0))
    S_H2L1 = dabs(R1(state,1) - R2(state+1,1))/dabs(deltaR)
    S_L2L1 = dabs(R1(state,1) - R2(state,1))/dabs(deltaR)
 
-   if((nint(H1_H2).ne.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
-   !if(((nint(H1_H2).ne.0).and.(nint(L1_L2).ne.0)).and.(S_H2L1.gt.S_L2L1)) then
-      print*, 'overwriting array for energy file'
-      tmp = tmp_nrg(state,1:tmp_size)
-      tmp_nrg(state,1:tmp_size) = tmp_nrg(state+1,1:tmp_size)
-      tmp_nrg(state+1,1:tmp_size) = tmp
-      print*, 'swapping Energies'
-      call swap(state, R1)
+   !if((nint(H1_H2).eq.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+   !if((nint(H1_H2).ne.nint(L1_L2)).and.(S_H2L1.gt.S_L2L1)) then
+   !print*, 'LOOKING FOR VALUE NEAR: ', comp_value
+   !if (nint(comp_value).eq.nint(R2(state,1))) then
+   if((nint(H1_H2).eq.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
+      print*, 'TESTING BECAUSE THIS IS CRAZY? State = ', state
+      print*, 'TESTING BECAUSE THIS IS CRAZY? nint(comp_value) = ', nint(comp_value)
+      print*, 'TESTING BECAUSE THIS IS CRAZY? nint(R2(state,1)) = ', nint(R2(state,1))
+
       found_flag = found_flag+1
-      if(found_flag = 1) then !!need 2 swapstates if two are found to be able to swap psi
+      if(found_flag.eq.1) then !!need 2 swapstates if two are found to be able to swap psi
          swapstate = state
       endif
+      ! print*, 'overwriting array for energy file'
+      ! tmp = tmp_nrg(state,1:tmp_size)
+      ! tmp_nrg(state,1:tmp_size) = tmp_nrg(state+1,1:tmp_size)
+      ! tmp_nrg(state+1,1:tmp_size) = tmp
+      ! print*, 'swapping Energies'
+      ! call swap(state, R1)
+      ! found_flag = found_flag+1
+      ! if(found_flag = 1) then !!need 2 swapstates if two are found to be able to swap psi
+      !    swapstate = state
+      ! endif
    endif
    state = state - 1
 enddo
