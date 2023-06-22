@@ -78,7 +78,7 @@ program HHL1DHyperspherical
    TYPE(basis) RB
 
    double precision tmp, tmp1, tmp2, comp_value
-   integer row_tmp, col_tmp
+   integer row_tmp, col_tmp, index, max_state
    integer imu, inu, found_flag
 
 
@@ -303,6 +303,7 @@ program HHL1DHyperspherical
 
  allocate(curr_nrg(RSteps,NumStates))
  swapstate = 0
+ max_state = 79
   CrossingFlag = 0
   RChange=100.d0
   if (CrossingFlag.eq.0) then
@@ -389,11 +390,6 @@ program HHL1DHyperspherical
              NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
 
          if(iR .ne. RSteps) then
-            if(iR.le.97) then !!For some reason comp_value here is always being set to 100??
-               comp_value = ((mu/2)*R(iR+3)**2)*COS(theta_C)**2-13.42087120307046
-            else
-               comp_value = 100
-            endif
             !print*, '((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046 ',((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046
             !stop
             do i = 1, NumStates
@@ -401,8 +397,7 @@ program HHL1DHyperspherical
             enddo
             write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !store non-adiabatized values for reference
             found_flag = 0
-            call Avoided_Crossings(CB%Energies,oldEnergies, curr_nrg, (RSteps-iR+1),&
-            NumStates,(R(iR+1)-R(iR)), swapstate,found_flag, comp_value)!changes curr_nrg and CB%energies
+            call Avoided_Crossings(CB%Energies,oldEnergies,NumStates,R,RSteps,index, swapstate,found_flag,max_state)!changes curr_nrg and CB%energies
             if (found_flag.eq.1) then
                do i = iR, RSteps
                   tmp_nrg = curr_nrg(i,swapstate)
@@ -410,7 +405,7 @@ program HHL1DHyperspherical
                   curr_nrg(i,swapstate+1) = tmp_nrg
                enddo
             endif
-            call subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+            call swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
          else
             do i = 1, NumStates
                curr_nrg(iR,i) = CB%Energies(i,1)
@@ -625,22 +620,18 @@ enddo
 
 end subroutine swap
 
-subroutine Avoided_Crossings(R1,R2,tmp_nrg,tmp_size,NumStates,deltaR,swapstate,found_flag, comp_value)
+subroutine Avoided_Crossings(R1,R2,NumStates,R,RSteps,index,swapstate,found_flag,max_state)
 implicit none
-double precision R1(NumStates,2), R2(NumStates,2), tmp_nrg(NumStates,tmp_size), tmp(tmp_size)
-double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, deltaR, tmp2, comp_value
-integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state
+double precision R1(NumStates,2), R2(NumStates,2)
+double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, R(RSteps), tmp2, comp_value, deltaR
+integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state, index, RSteps
 
-if(swapstate.ne.0) then
-   max_state = swapstate
-else
-   max_state = NumStates
-endif
+deltaR = R(index+1)-R(index) ! check to make sure this is correct
 
 print*, '*********max_state =************', max_state
 
 found_flag = 0
-state = max_state-1
+state = max_state
 do while((found_flag.ne.1).and.(state.ne.0))
 !do state = NumStates-1, 1, -1
    H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
@@ -659,9 +650,8 @@ do while((found_flag.ne.1).and.(state.ne.0))
       print*, 'TESTING BECAUSE THIS IS CRAZY? nint(R2(state,1)) = ', nint(R2(state,1))
 
       found_flag = found_flag+1
-      if(found_flag.eq.1) then !!need 2 swapstates if two are found to be able to swap psi
-         swapstate = state
-      endif
+      swapstate = state
+      max_state = state
       ! print*, 'overwriting array for energy file'
       ! tmp = tmp_nrg(state,1:tmp_size)
       ! tmp_nrg(state,1:tmp_size) = tmp_nrg(state+1,1:tmp_size)
