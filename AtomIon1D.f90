@@ -1,199 +1,165 @@
 module BasisSets
-  implicit none
-
+   implicit none
    double precision, allocatable :: S_lm(:,:)
    double precision, allocatable :: S_mr(:,:)
-
-  TYPE basis
-
-   integer Left, Right
-   integer xDim
+TYPE basis
+   integer Left, Right, xDim
    double precision, allocatable :: u(:,:,:), uxx(:,:,:)
    double precision, allocatable :: S(:,:)
    double precision, allocatable :: H(:,:)
    double precision, allocatable :: Psi(:,:),Energies(:,:)
    double precision, allocatable :: nrg_mat(:,:)
    double precision alpha, beta
-   !double precision, allocatable :: alphas(:),betas(:)
-   
    integer, allocatable :: xBounds(:)
-
-   END TYPE basis
-
+END TYPE basis
 contains
-
    subroutine AllocateBasis(T,Left, Right,Order, LegPoints, xNumPoints,NumStates,RSteps)
-
-   implicit none
-
-   integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv, RSteps
-
-   TYPE(basis) T
-   
-   T%Left = Left
-   T%Right = Right
-    
-   T%xDim = xNumPoints+Order-3
-    if (Left .eq. 2) T%xDim = T%xDim + 1
-    if (Right .eq. 2) T%xDim = T%xDim + 1
-
-   MatrixDim = T%xDim
-   ncv = 2*NumStates
-
-   allocate(T%u(LegPoints, xNumPoints, T%xDim))
-   allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
-   allocate(T%xBounds(xNumPoints+2*Order))
-   allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim))
-
-   allocate(T%Psi(MatrixDim,ncv))
-   allocate(T%Energies(ncv,2))
-   allocate(T%nrg_mat(RSteps,NumStates))
-
-   !allocate(T%alphas(RSteps), T%betas(RSteps)) !!new
-
+      implicit none
+      integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv, RSteps
+      TYPE(basis) T
+      T%Left = Left
+      T%Right = Right
+      T%xDim = xNumPoints+Order-3
+      if (Left .eq. 2) T%xDim = T%xDim + 1
+      if (Right .eq. 2) T%xDim = T%xDim + 1
+      MatrixDim = T%xDim
+      ncv = 2*NumStates
+      allocate(T%u(LegPoints, xNumPoints, T%xDim))
+      allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
+      allocate(T%xBounds(xNumPoints+2*Order))
+      allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim))
+      allocate(T%Psi(MatrixDim,ncv))
+      allocate(T%Energies(ncv,2))
+      allocate(T%nrg_mat(RSteps,NumStates))
    end subroutine AllocateBasis
-
    subroutine deAllocateBasis(T)
-
-   implicit none
-
-   TYPE(basis) T
-
-   deallocate(T%u)
-   deallocate(T%uxx)
-   deallocate(T%xBounds)
-   deallocate(T%S)
-   deallocate(T%H)
-   deallocate(T%Psi)
-   deallocate(T%Energies)
-
+      implicit none
+      TYPE(basis) T
+      deallocate(T%u)
+      deallocate(T%uxx)
+      deallocate(T%xBounds)
+      deallocate(T%S)
+      deallocate(T%H)
+      deallocate(T%Psi)
+      deallocate(T%Energies)
    end subroutine deAllocateBasis
-
 end module BasisSets
-program HHL1DHyperspherical
-  use BasisSets
-  implicit none
 
+program HHL1DHyperspherical
+   use BasisSets
+   implicit none
    TYPE(basis) PB
    TYPE(basis) CB
    TYPE(basis) LB
    TYPE(basis) RB
+   double precision tmp, tmp1, tmp2
+   integer row_tmp, col_tmp, index, max_state, LegPoints,xNumPoints, newRow
+   integer max_state1, max_state2
+   integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
+   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
+   double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
+   double precision, allocatable :: R(:)
+   double precision, allocatable :: xPoints(:)
+   double precision, allocatable :: slopes(:,:)
+   double precision, allocatable :: curr_nrg(:,:)
 
-   double precision tmp, tmp1, tmp2, comp_value
-   integer row_tmp, col_tmp, index, max_state
-   integer imu, inu, found_flag
+   logical, allocatable :: Select(:)
 
+   integer swapstate,iparam(11),ncv,info,troubleshooting
+   integer i,j,k,iR,NumFirst,NumBound
+   integer LeadDim,MatrixDim,HalfBandWidth
+   integer xDim, Nbs
+   integer, allocatable :: iwork(:)
+   double precision Tol,RChange
+   double precision TotalMemory
+   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
+   double precision YVal_L,RVal_L, RVal_R
 
-  integer LegPoints,xNumPoints, newRow
-  integer NumStates,PsiFlag,Order,Left,Right
-  integer RSteps,CouplingFlag, CrossingFlag
-  double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
-  double precision RLeft,RRight,RDerivDelt,DD,L
-  DOUBLE PRECISION RFirst,RLast,XFirst,XLast,StepX,StepR
-  double precision xMin,xMax, tmp_nrg
-  double precision, allocatable :: R(:)
-  double precision, allocatable :: xPoints(:)
-  double precision, allocatable :: slopes(:,:)
-  double precision, allocatable :: center_nrg(:,:), left_nrg(:,:), right_nrg(:,:), curr_nrg(:,:)
+   double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
+   double precision, allocatable :: LUFac(:,:),workl(:)
+   double precision, allocatable :: workd(:),Residuals(:)
+   double precision, allocatable :: xLeg(:),wLeg(:)
+   !  double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
+   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
+   double precision ur(1:50000),acoef,bcoef,diff
+   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
+   double precision hbar, phi, amu,omega,Rstar, dum
+   character*64 LegendreFile
+   character*64 leftnrg
+   common /Rvalue/ Rvalue      
+   hbar = 1.054571817d-34
+   amu = 1.660539d-27
+   !     read in number of energies and states to print
+   read(5,*)
+   read(5,*) NumStates,PsiFlag,CouplingFlag
+   write(6,*) NumStates,PsiFlag,CouplingFlag
 
-  logical, allocatable :: Select(:)
+   !     read in Gauss-Legendre info
+   read(5,*)
+   read(5,*)
+   read(5,1002) LegendreFile
+   write(6,1002) LegendreFile
+   read(5,*)
+   read(5,*)
+   read(5,*) LegPoints
+   write(6,*) LegPoints,' LegPoints'
 
-  integer swapstate
-  integer iparam(11),ncv,info
-  integer i,j,k,iR,NumFirst,NumBound
-  integer LeadDim,MatrixDim,HalfBandWidth
-  integer xDim, Nbs
-  integer, allocatable :: iwork(:)
-  double precision Tol,RChange
-  double precision TotalMemory
-  double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
-  double precision YVal_L,RVal_L, RVal_R
+   !     read in boundary conditions
+   read(5,*)
+   read(5,*)
+   read(5,*) Shift,Shift2,Order,Left,Right
+   print*, 'Shift,Shift2, Order, Left, Right'
+   print*, Shift,Shift2,Order,Left,Right
 
-  double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
-  double precision, allocatable :: LUFac(:,:),workl(:)
-  double precision, allocatable :: workd(:),Residuals(:)
-  double precision, allocatable :: xLeg(:),wLeg(:)
-!  double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
-  double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
-  double precision ur(1:50000),acoef,bcoef,diff
-  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
-  double precision hbar, phi, amu,omega,Rstar, dum
-  character*64 LegendreFile
-  character*64 leftnrg
-  common /Rvalue/ Rvalue      
-  hbar = 1.054571817d-34
-  amu = 1.660539d-27
-  !     read in number of energies and states to print
-  read(5,*)
-  read(5,*) NumStates,PsiFlag,CouplingFlag
-  write(6,*) NumStates,PsiFlag,CouplingFlag
+   !     read in potential parameters
+   read(5,*)
+   read(5,*)
+   read(5,*) alpha,mi,ma,DD,L
+   write(6,*) alpha,mi,ma,DD,L
+   mi = mi*amu
+   ma = ma*amu
 
-  !     read in Gauss-Legendre info
-  read(5,*)
-  read(5,*)
-  read(5,1002) LegendreFile
-  write(6,1002) LegendreFile
-  read(5,*)
-  read(5,*)
-  read(5,*) LegPoints
-  write(6,*) LegPoints,' LegPoints'
+   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
+   mu=dsqrt(ma/mi)
+   Pi=dacos(-1.d0)
+   write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
+   mgamma = mu
+   theta_c = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
+   write(6,*) "theta_c = ", theta_c
 
-  !     read in boundary conditions
-  read(5,*)
-  read(5,*)
-  read(5,*) Shift,Shift2,Order,Left,Right
-  print*, 'Shift,Shift2, Order, Left, Right'
-  print*, Shift,Shift2,Order,Left,Right
+   !     read in grid information
+   read(5,*)
+   read(5,*)
+   read(5,*) xNumPoints, omega, Nbs, C4, phi
+   write(6,*) xNumPoints, omega, Nbs, C4, phi
+   omega = 2d0*Pi*omega
+   lho = dsqrt(hbar/mi/omega)
+   Rstar = dsqrt(2*mu12*C4/hbar**2)
+   C4 = C4/(hbar*omega*lho**4)
+   sNb = 1.d0/(dble(Nbs)*Pi + phi) !sNb is sNb from new notes
+   
+   write(6,*) "C4 = ", C4
+   write(6,*) "Rstar = ", Rstar
+   write(6,*) "sNb = ", sNb
 
-  !     read in potential parameters
-  read(5,*)
-  read(5,*)
-  read(5,*) alpha,mi,ma,DD,L
-  write(6,*) alpha,mi,ma,DD,L
-  mi = mi*amu
-  ma = ma*amu
+   ! Re-define in oscillator units
 
-  mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
-  mu=dsqrt(ma/mi)
-  Pi=dacos(-1.d0)
-  write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
-  mgamma = mu
-  theta_c = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
-  write(6,*) "theta_c = ", theta_c
+   ma = ma/mi
+   mi = 1d0
+   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
+   !      mu=dsqrt(mi*ma)
 
-  !     read in grid information
-  read(5,*)
-  read(5,*)
-  read(5,*) xNumPoints, omega, Nbs, C4, phi
-  write(6,*) xNumPoints, omega, Nbs, C4, phi
-  omega = 2d0*Pi*omega
-  lho = dsqrt(hbar/mi/omega)
-  Rstar = dsqrt(2*mu12*C4/hbar**2)
-  C4 = C4/(hbar*omega*lho**4)
-  sNb = 1.d0/(dble(Nbs)*Pi + phi) !sNb is sNb from new notes
-  
-  write(6,*) "C4 = ", C4
-  write(6,*) "Rstar = ", Rstar
-  write(6,*) "sNb = ", sNb
-
-  ! Re-define in oscillator units
-
-  ma = ma/mi
-  mi = 1d0
-  mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
-  !      mu=dsqrt(mi*ma)
-
-  read(5,*)
-  read(5,*)
-  read(5,*) RSteps,RDerivDelt,RFirst,RLast
-  write(6,*) RSteps,RDerivDelt,RFirst,RLast
+   read(5,*)
+   read(5,*)
+   read(5,*) RSteps,RDerivDelt,RFirst,RLast
+   write(6,*) RSteps,RDerivDelt,RFirst,RLast
 
 
-  write(6,*) "Resetting RFirst from: ", RFirst
+   write(6,*) "Resetting RFirst from: ", RFirst
 
-  RFirst = dsqrt(mu/(1+mu**2))*(RStar/(lho*(Nbs*Pi+phi)))+2*RDerivDelt
+   RFirst = dsqrt(mu/(1+mu**2))*(RStar/(lho*(Nbs*Pi+phi)))+2*RDerivDelt
 
-  write(6,*) "to: ", RFirst
+   write(6,*) "to: ", RFirst
 
   !     c   XFirst=dsqrt(RFirst)
   !     c   XLast=dsqrt(RLast)
@@ -206,9 +172,6 @@ program HHL1DHyperspherical
 !  StepX=(XLast-XFirst)/(RSteps-1.d0)
 
   allocate(slopes(RSteps,NumStates))
-  allocate(center_nrg(RSteps,NumStates))
-  allocate(left_nrg(RSteps,NumStates))
-  allocate(right_nrg(RSteps,NumStates))
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
   do i = 1,RSteps
@@ -273,163 +236,68 @@ program HHL1DHyperspherical
 
    call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates, RSteps)
    call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
-
-   write(6,*) 'SHAPE OF PB%S: ', shape(PB%S)
-   write(6,*) 'SHAPE OF CB%S: ', shape(CB%S)
-   write(6,*) 'SHAPE OF xPoints: ', shape(xPoints)
-   write(6,*) 'SHAPE OF PB%u: ', shape(PB%u)
-   write(6,*) 'SHAPE OF CB%u: ', shape(CB%u)
-   write(6,*) 'SHAPE OF CB%Psi: ', shape(CB%Psi)
-
-  if (CouplingFlag .ne. 0) then
-
-   call AllocateBasis(LB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
-   call AllocateBasis(RB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
-
-   write(6,*) 'Left, right basis splines allocated.'
-
-  end if
+   if (CouplingFlag .ne. 0) then
+      call AllocateBasis(LB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
+      call AllocateBasis(RB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
+      write(6,*) 'Left, right basis splines allocated.'
+   end if
 
    open(unit = 200, file = "energies.dat")
    open(unit = 201, file = "og_energies.dat")
    open(unit = 101, file = "P_Matrix.dat")
    open(unit = 102, file = "Q_Matrix.dat")
-   open(unit=11, file = "leftnrg.dat")
 
-   !open(unit=11,file=leftnrg(1:INDEX(leftnrg,' ')-1))
-   !open(unit=200,file=energies.dat(1:INDEX(energies.dat,' ')-1))
-   !open(unit=12,file=right_energies.dat(1:INDEX(right_energies.dat,' ')-1))
-
-   !open(unit = 1, file = "left_energies.dat")
-   !open(unit = 2, file = "right_energies.dat")
-
- allocate(curr_nrg(RSteps,NumStates))
- swapstate = 0
- max_state = 79
-  CrossingFlag = 0
-  RChange=100.d0
-  if (CrossingFlag.eq.0) then
-  do iR = RSteps,1,-1 !RSteps
-     NumFirst=NumStates
-     if (R(iR).gt.RChange) then
-        NumFirst=NumBound
-     endif
-     NumStateInc=NumStates-NumFirst
+troubleshooting = 0
+   allocate(curr_nrg(RSteps,NumStates))
+   swapstate = 0
+   max_state = 79
+   max_state1 = 79
+   max_state2 = 79
+if(troubleshooting.eq.0) then
+   CrossingFlag = 1
+   RChange=100.d0
+   do iR = RSteps,1,-1 !RSteps
+      NumFirst=NumStates
+      if (R(iR).gt.RChange) then
+         NumFirst=NumBound
+      endif
+      NumStateInc=NumStates-NumFirst
      !c----------------------------------------------------------------------------------------
      !     must move this block inside the loop over iR if the grid is adaptive
-
       print*, 'Beginning iteration at iR = ', iR
       print*, 'Such that R(iR) = ', R(iR)
-
-      !sNb = 1.d0/(dble(Nbs)*Pi + phi)
-
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
-      
-      !write(6,*) 'Testing value of dble(Nbs)*Pi - phi: ', -dble(Nbs)*Pi + phi
-      
       print*, 'calling GridMaker.'
-
       if (CouplingFlag .eq. 0) then
-     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
-     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) ! ''
+         xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
+         xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) ! ''
       endif
 
       if (CouplingFlag .eq. 1) then
-     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft and fixed sNb.
-     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
+         xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft and fixed sNb.
+         xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
       endif
-
-     print*, 'Using xMin = ', xMin
-     print*, 'Using xMax = ', xMax
-
+      print*, 'Using xMin = ', xMin
+      print*, 'Using xMax = ', xMax
       sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c)
-
       print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
-
-     if(xMax.le.xMin) then
-        write(6,*) "minimum hyperradius too small."
-        stop
-     endif
-     call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
-        print*, 'done... Calculating Primitive Basis Functions'
+      if(xMax.le.xMin) then
+         write(6,*) "minimum hyperradius too small."
+         stop
+      endif
+      call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
+         print*, 'done... Calculating Primitive Basis Functions'
          tmp_alpha = 1
          tmp_beta = 1
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta,.false.)
          call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
          LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx, tmp_alpha, tmp_beta,.false.)
-     print*, 'done... Calculating overlap matrix'
-     !     must move this block inside the loop if the grid is adaptive
-     !----------------------------------------------------------------------------------------
-     call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,PB%xDim,xNumPoints,PB%u,PB%xBounds,HalfBandWidth,PB%S)
-
-!******** CONSTRUCTION OF CENTER BASIS SETS ********
-!!!!!!!!!
-   if(CouplingFlag.eq.0) then
-      write(6,*) 'Constructing center basis set.'
-
-      YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
-      RVal_L = 1.d0/YVal_L
-      !RVal_L = 0d0
-      RVal_R = -RVal_L
-
-     write(6,*) 'Center Basis YVal_L = ', YVal_L
-     write(6,*) 'Center Basis RVal_L = ', RVal_L
-
-     call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
-     xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta, .true.)
-
-      call calc_Physical_Set(CB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
-         write(6,*) 'CB%alpha (u) = ', CB%alpha
-         write(6,*) 'CB%beta (u) = ', CB%beta
-
-      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
-
-      write(6,*) 'Center Basis Set Constructed.'
-      
-        call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
-             LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
-        call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-             NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
-
-         if(iR .ne. RSteps) then
-            !print*, '((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046 ',((mu/2)*R(iR)**2)*COS(theta_C)**2-13.42087120307046
-            !stop
-            do i = 1, NumStates
-               curr_nrg(iR,i) = CB%Energies(i,1)
-            enddo
-            write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !store non-adiabatized values for reference
-            found_flag = 0
-            call Avoided_Crossings(CB%Energies,oldEnergies,NumStates,R,RSteps,index, swapstate,found_flag,max_state)!changes curr_nrg and CB%energies
-            if (found_flag.eq.1) then
-               do i = iR, RSteps
-                  tmp_nrg = curr_nrg(i,swapstate)
-                  curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
-                  curr_nrg(i,swapstate+1) = tmp_nrg
-               enddo
-            endif
-            call swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
-         else
-            do i = 1, NumStates
-               curr_nrg(iR,i) = CB%Energies(i,1)
-               write(201, 20) R(iR), CB%Energies(i,1)
-            enddo
-            !write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
-         endif
-         oldEnergies = CB%Energies !!declare oldEnergies
-         
-         !write(200,20) R(iR), (curr_nrg(i,1), i = 1,NumStates)
-
-         !Fix psis here :o
-
-         if(iR .ne. RSteps) then
-            call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
-         endif
-         oldPsi = CB%Psi
-        call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
-   endif
-!!!!!!!!!
-     if (CouplingFlag .ne. 0) then
+      print*, 'done... Calculating overlap matrix'
+      !     must move this block inside the loop if the grid is adaptive
+      !----------------------------------------------------------------------------------------
+      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,PB%xDim,xNumPoints,PB%u,PB%xBounds,HalfBandWidth,PB%S)
+!******** CONSTRUCTION OF BASIS SETS ********
       write(6,*) 'Constructing center basis set.'
       YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
       RVal_L = 1.d0/YVal_L
@@ -447,72 +315,71 @@ program HHL1DHyperspherical
          LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
       call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
          NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
-
-      write(6,*) 'Constructing left basis set.'
-      RLeft = R(iR)-RDerivDelt ! This is just for reference, as RLeft is already declared in this loop
-      YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RLeft))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
-      RVal_L = 1.d0/YVal_L
-      RVal_R = -RVal_L
-      write(6,*) 'Left Basis YVal_L = ', YVal_L
-      write(6,*) 'Left basis RVal_L = ', RVal_L
-      LB%xBounds = CB%xBounds
-      call calc_Physical_Set(LB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
-      write(6,*) 'LB%alpha (u) = ', LB%alpha
-      write(6,*) 'LB%beta (u) = ', LB%beta
-      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%xBounds,HalfBandWidth,LB%S)
-      write(6,*) 'Left Basis Set Constructed.'
-      call CalcHamiltonian(alpha,RLeft,mu,mi,theta_c,C4,L,Order,xPoints,&
-         LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%uxx,LB%xBounds,HalfBandWidth,LB%H)
-      call MyDsband(Select,LB%Energies,LB%Psi,MatrixDim,Shift,MatrixDim,LB%H,LB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-         NumStates,Tol,Residuals,ncv,LB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+      if (CouplingFlag .ne. 0) then
+         write(6,*) 'Constructing left basis set.'
+         RLeft = R(iR)-RDerivDelt ! This is just for reference, as RLeft is already declared in this loop
+         YVal_L = (lho/Rstar)*RLeft*dsqrt((1+mu**2)/mu - ((sNb*Rstar)/(lho*RLeft))**2) * ((1/sNb)+(1/sNb**2)*COTAN(-(1/sNb)+phi))
+         RVal_L = 1.d0/YVal_L
+         RVal_R = -RVal_L
+         write(6,*) 'Left Basis YVal_L = ', YVal_L
+         write(6,*) 'Left basis RVal_L = ', RVal_L
+         LB%xBounds = CB%xBounds
+         call calc_Physical_Set(LB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
+         write(6,*) 'LB%alpha (u) = ', LB%alpha
+         write(6,*) 'LB%beta (u) = ', LB%beta
+         call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%xBounds,HalfBandWidth,LB%S)
+         write(6,*) 'Left Basis Set Constructed.'
+         call CalcHamiltonian(alpha,RLeft,mu,mi,theta_c,C4,L,Order,xPoints,&
+            LegPoints,xLeg,wLeg,LB%xDim,xNumPoints,LB%u,LB%uxx,LB%xBounds,HalfBandWidth,LB%H)
+         call MyDsband(Select,LB%Energies,LB%Psi,MatrixDim,Shift,MatrixDim,LB%H,LB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+            NumStates,Tol,Residuals,ncv,LB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
       
-      write(6,*) 'Constructing right basis set.'
-      RRight =  R(iR)+RDerivDelt
-      YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*RRight))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
-      RVal_L = 1.d0/YVal_L
-      RVal_R = -RVal_L
-      write(6,*) 'Right Basis YVal_L = ', YVal_L
-      write(6,*) 'Right basis RVal_L = ', RVal_L
-      RB%xBounds = CB%xBounds
-      call calc_Physical_Set(RB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
-      write(6,*) 'RB%alpha (u) = ', RB%alpha
-      write(6,*) 'RB%beta (u) = ', RB%beta
-      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%xBounds,HalfBandWidth,RB%S)
-      write(6,*) 'Right Basis Set Constructed.'
-      call CalcHamiltonian(alpha,RRight,mu,mi,theta_c,C4,L,Order,xPoints,&
-         LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%uxx,RB%xBounds,HalfBandWidth,RB%H)
-      call MyDsband(Select,RB%Energies,RB%Psi,MatrixDim,Shift,MatrixDim,RB%H,RB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-         NumStates,Tol,Residuals,ncv,RB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
-      
-      do i = 1, NumStates
-         LB%nrg_mat(iR,i) = LB%Energies(i,1)
-         CB%nrg_mat(iR,i) = CB%Energies(i,1)
-         RB%nrg_mat(iR,i) = RB%Energies(i,1)
-         write(201, 20) R(iR), LB%Energies(i,1) !writing original energies to og_energies.dat
-         write(201, 20) R(iR), CB%Energies(i,1)
-         write(201, 20) R(iR), RB%Energies(i,1)
-      enddo
-      if(iR.ne.RSteps) then
-         call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
+         write(6,*) 'Constructing right basis set.'
+         RRight =  R(iR)+RDerivDelt
+         YVal_L = (lho/Rstar)*RRight*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*RRight))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
+         RVal_L = 1.d0/YVal_L
+         RVal_R = -RVal_L
+         write(6,*) 'Right Basis YVal_L = ', YVal_L
+         write(6,*) 'Right basis RVal_L = ', RVal_L
+         RB%xBounds = CB%xBounds
+         call calc_Physical_Set(RB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
+         write(6,*) 'RB%alpha (u) = ', RB%alpha
+         write(6,*) 'RB%beta (u) = ', RB%beta
+         call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%xBounds,HalfBandWidth,RB%S)
+         write(6,*) 'Right Basis Set Constructed.'
+         call CalcHamiltonian(alpha,RRight,mu,mi,theta_c,C4,L,Order,xPoints,&
+            LegPoints,xLeg,wLeg,RB%xDim,xNumPoints,RB%u,RB%uxx,RB%xBounds,HalfBandWidth,RB%H)
+         call MyDsband(Select,RB%Energies,RB%Psi,MatrixDim,Shift,MatrixDim,RB%H,RB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+            NumStates,Tol,Residuals,ncv,RB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
       endif
-         do i = 1, NumStates
-         write(200, 20) R(iR), LB%Energies(i,1) !writing diabatized energies to energies.dat
-         write(200, 20) R(iR), CB%Energies(i,1)
-         write(200, 20) R(iR), RB%Energies(i,1)
+      do i = 1, NumStates
+         if (CouplingFlag.eq.1) LB%nrg_mat(iR,i) = LB%Energies(i,1)
+         CB%nrg_mat(iR,i) = CB%Energies(i,1)
+         if (CouplingFlag.eq.1) RB%nrg_mat(iR,i) = RB%Energies(i,1)
       enddo
-
+      if (CouplingFlag.eq.1) write(201, 20) RRight, (RB%Energies(i,1), i = 1,NumStates) !writing original energies to og_energies.dat
+      write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
+      if (CouplingFlag.eq.1) write(201, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates)
+      if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
+         if(iR.ne.RSteps) then
+            call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
+         endif
+            !write(200, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates) !writing diabatized energies to energies.dat
+            !write(200, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
+            !write(200, 20) RRight, (RB%Energies(i,1), i = 1,NumStates)
+      endif
       if(iR .ne. RSteps) then
          call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
       endif
       oldPsi = CB%Psi
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
 
-      call FixPhase(NumStates,HalfBandWidth,MatrixDim,LB%S,ncv,CB%Psi,LB%Psi)
-      call CalcEigenErrors(info,iparam,MatrixDim,LB%H,HalfBandWidth+1,LB%S,HalfBandWidth,NumStates,LB%Psi,LB%Energies,ncv)
-
-      call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,CB%Psi,RB%Psi)
-      call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,RB%Psi,RB%Energies,ncv)
-
+      if (CouplingFlag.eq.1) then
+         call FixPhase(NumStates,HalfBandWidth,MatrixDim,LB%S,ncv,CB%Psi,LB%Psi)
+         call CalcEigenErrors(info,iparam,MatrixDim,LB%H,HalfBandWidth+1,LB%S,HalfBandWidth,NumStates,LB%Psi,LB%Energies,ncv)
+         call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,CB%Psi,RB%Psi)
+         call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,RB%Psi,RB%Energies,ncv)
+      endif
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -528,20 +395,18 @@ write(6,*) 'writing the energies'
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+   !call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
-        write(101,*) R(iR)
-        write(102,*) R(iR)
+   !     write(101,*) R(iR)
+   !     write(102,*) R(iR)
         !write(103,*) R(iR)
-        do i = 1,min(NumStates,iparam(5))
-           write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
-           write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
+   !     do i = 1,min(NumStates,iparam(5))
+   !        write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
+   !        write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
            !write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
-        enddo
-         write(107,*) 'Shape(P): ', Shape(P)
-         write(107,*) 'Shape(Q): ', Shape(Q)
-
-   endif
+   !     enddo
+   !      write(107,*) 'Shape(P): ', Shape(P)
+   !      write(107,*) 'Shape(Q): ', Shape(Q)
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -576,20 +441,34 @@ write(6,*) 'writing the energies'
    ! print*, 'CB%energies(81,1)', CB%energies(81,1)
 
   enddo
-  endif
 
    do iR = RSteps, 1, -1
-      write(200,20) R(iR),(curr_nrg(iR, j), j=1,NumStates)
-      !read(11,*) (left_nrg(iR,j), j = 1,NumStates)
-      !read(12,*) (right_nrg(iR,j), j = 1,NumStates)
-      !read(200,*) (nrg(iR,j), j = 1,NumStates)
+      write(200,20) RRight, (RB%nrg_mat(iR,j), j=1, NumStates)
+      write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
+      write(200,20) RLeft, (LB%nrg_mat(iR,j), j=1, NumStates)
    enddo
 
-   do iR = 1, RSteps
-      do i = 1, NumStates
-         slopes(iR,i) = (right_nrg(iR,i)-left_nrg(iR,i))/((R(iR)+RDerivDelt)-(R(iR)-RDerivDelt)) !Stores slope of each triad
+endif
+
+   open(201)
+
+   if(troubleshooting.eq.1) then
+      do iR = RSteps*3,1,-3
+         read(201,*) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(201,*) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(201,*) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
       enddo
-   enddo
+      do iR = RSteps-1, 1,-1
+         print*, '************NEW LOOP*************'
+         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state1)
+         !if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state2)
+      enddo
+      do iR = RSteps, 1, -1
+         write(200,20) R(iR)+RDerivDelt, (RB%nrg_mat(iR,j), j=1, NumStates)
+         write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
+         write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
+      enddo
+   endif
 
    close(11)
    close(200)
@@ -628,20 +507,31 @@ type(BASIS) CB, LB, RB
 double precision RDerivDelt, R(RSteps), slopes(2,2)
 integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag
 
+
 found_flag = 0
 swapstate = 0
 state = max_state !=80 at the beginning of main loop
-do while((found_flag.ne.1).and.(state.ne.0))
+print*, 'max_state = ', max_state
+do while((found_flag.ne.2).and.(state.ne.2))
    slopes(1,1) = (RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
    slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
    slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
    slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
-
-   if(swapstate.eq.1) then
-      print*, 'Found sharp avoided crossing at R(iR)= ', R(iR), 'with energy = ', CB%energies(state,1)
+   print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
+   dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
+   print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
+   dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
+   if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.150)&
+   .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.150)) then
+      print*, 'max_state = ', max_state
+      print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
+       'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
+      swapstate = state
       call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
       call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
       call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+      found_flag = found_flag+1
+      !max_state = state
    endif
    state = state - 1
 enddo
@@ -651,10 +541,10 @@ subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
 implicit none
 double precision curr_nrg(RSteps, NumStates), tmp_nrg
 integer swapstate, iR, RSteps, NumStates, i
-do i = iR, RSteps
-   tmp_nrg = curr_nrg(i,swapstate)
-   curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
-   curr_nrg(i,swapstate+1) = tmp_nrg
+do i = iR+1, RSteps
+  tmp_nrg = curr_nrg(i,swapstate)
+  curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+  curr_nrg(i,swapstate+1) = tmp_nrg
 enddo
 end subroutine swap_full
 
