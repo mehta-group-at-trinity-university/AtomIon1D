@@ -65,7 +65,7 @@ program HHL1DHyperspherical
 
    logical, allocatable :: Select(:)
 
-   integer swapstate,iparam(11),ncv,info,troubleshooting
+   integer swapstate,iparam(11),ncv,info,troubleshooting, swapstate1, swapstate2
    integer i,j,k,iR,NumFirst,NumBound
    integer LeadDim,MatrixDim,HalfBandWidth
    integer xDim, Nbs
@@ -361,25 +361,32 @@ if(troubleshooting.eq.0) then
       write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
       if (CouplingFlag.eq.1) write(201, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates)
       if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
-         if(iR.ne.RSteps) then
-            call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
-         endif
-            !write(200, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates) !writing diabatized energies to energies.dat
-            !write(200, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
-            !write(200, 20) RRight, (RB%Energies(i,1), i = 1,NumStates)
+         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
+         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
       endif
       if(iR .ne. RSteps) then
          call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
       endif
       oldPsi = CB%Psi
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
-
       if (CouplingFlag.eq.1) then
          call FixPhase(NumStates,HalfBandWidth,MatrixDim,LB%S,ncv,CB%Psi,LB%Psi)
          call CalcEigenErrors(info,iparam,MatrixDim,LB%H,HalfBandWidth+1,LB%S,HalfBandWidth,NumStates,LB%Psi,LB%Energies,ncv)
          call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,CB%Psi,RB%Psi)
          call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,RB%Psi,RB%Energies,ncv)
       endif
+
+      if(swapstate1.ne.0) then
+         call swap_psi(swapstate1,LB%Psi)
+         call swap_psi(swapstate1,CB%Psi)
+         call swap_psi(swapstate1,RB%Psi)
+      endif
+
+      if(swapstate2.ne.0) then
+         !swap second detected swapstate in psi
+      endif
+      !!^can maybe combine
+
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -395,16 +402,16 @@ write(6,*) 'writing the energies'
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
-   !call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
-   !     write(101,*) R(iR)
-   !     write(102,*) R(iR)
-        !write(103,*) R(iR)
-   !     do i = 1,min(NumStates,iparam(5))
-   !        write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
-   !        write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
-           !write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
-   !     enddo
+        write(101,*) R(iR)
+        write(102,*) R(iR)
+        write(103,*) R(iR)
+        do i = 1,min(NumStates,iparam(5))
+           write(101,20) (P(i,j), j = 1,min(NumStates,iparam(5)))
+           write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
+           write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
+        enddo
    !      write(107,*) 'Shape(P): ', Shape(P)
    !      write(107,*) 'Shape(Q): ', Shape(Q)
 
@@ -443,9 +450,9 @@ write(6,*) 'writing the energies'
   enddo
 
    do iR = RSteps, 1, -1
-      write(200,20) RRight, (RB%nrg_mat(iR,j), j=1, NumStates)
+      write(200,20) R(iR)+RDerivDelt, (RB%nrg_mat(iR,j), j=1, NumStates)
       write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
-      write(200,20) RLeft, (LB%nrg_mat(iR,j), j=1, NumStates)
+      write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
    enddo
 
 endif
@@ -454,14 +461,14 @@ endif
 
    if(troubleshooting.eq.1) then
       do iR = RSteps*3,1,-3
-         read(201,*) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
-         read(201,*) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
-         read(201,*) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(201,*,END=100) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(201,*,END=100) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(201,*, END=100) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
       enddo
-      do iR = RSteps-1, 1,-1
+      do iR = RSteps, 1,-1
          print*, '************NEW LOOP*************'
          if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state1)
-         !if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state2)
+         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state2)
       enddo
       do iR = RSteps, 1, -1
          write(200,20) R(iR)+RDerivDelt, (RB%nrg_mat(iR,j), j=1, NumStates)
@@ -472,6 +479,7 @@ endif
 
    close(11)
    close(200)
+   100 close(201)
 
    !call identify_crossings(slopes, nrg, RSteps, NumStates, R)
 
@@ -507,34 +515,35 @@ type(BASIS) CB, LB, RB
 double precision RDerivDelt, R(RSteps), slopes(2,2)
 integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag
 
-
-found_flag = 0
-swapstate = 0
-state = max_state !=80 at the beginning of main loop
-print*, 'max_state = ', max_state
-do while((found_flag.ne.2).and.(state.ne.2))
-   slopes(1,1) = (RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
-   slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
-   slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
-   slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
-   print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
-   dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
-   print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
-   dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
-   if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.150)&
-   .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.150)) then
-      print*, 'max_state = ', max_state
-      print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
-       'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
-      swapstate = state
-      call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      found_flag = found_flag+1
-      !max_state = state
-   endif
-   state = state - 1
-enddo
+if(iR.lt.RSteps) then
+   found_flag = 0
+   swapstate = 0
+   state = max_state !=80 at the beginning of main loop
+   print*, 'max_state = ', max_state
+   do while((found_flag.ne.2).and.(state.ne.2))
+      slopes(1,1) = (RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
+      slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
+      slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
+      slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
+      print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
+      dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
+      print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
+      dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
+      if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
+      .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
+         print*, 'max_state = ', max_state
+         print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
+         'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
+         swapstate = state
+         call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         found_flag = found_flag+1
+         max_state = state
+      endif
+      state = state - 1
+   enddo
+endif
 end subroutine Avoided_CrossingsV2
 
 subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
@@ -548,18 +557,18 @@ do i = iR+1, RSteps
 enddo
 end subroutine swap_full
 
-subroutine swap(swapstate, energy_array)
+subroutine swap_psi(swapstate, psi)
 implicit none
-double precision energy_array(80,2)
+double precision psi(80,2)
 integer swapstate, tmp, i
 
 do i = 1,2 !swaps each energy and it's derivative
-   tmp = energy_array(swapstate,i)
-   energy_array(swapstate,i) = energy_array(swapstate+1,i)
-   energy_array(swapstate+1,i) = tmp
+   tmp = psi(swapstate,i)
+   psi(swapstate,i) = psi(swapstate+1,i)
+   psi(swapstate+1,i) = tmp
 enddo
 
-end subroutine swap
+end subroutine swap_psi
 
 subroutine Avoided_Crossings(R1,R2,NumStates,R,RSteps,index,swapstate,found_flag,max_state)
 implicit none
