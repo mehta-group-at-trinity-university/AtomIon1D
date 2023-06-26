@@ -53,8 +53,7 @@ program HHL1DHyperspherical
    TYPE(basis) LB
    TYPE(basis) RB
    double precision tmp, tmp1, tmp2
-   integer row_tmp, col_tmp, index, max_state, LegPoints,xNumPoints, newRow
-   integer max_state1, max_state2
+   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
    double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
@@ -161,16 +160,6 @@ program HHL1DHyperspherical
 
    write(6,*) "to: ", RFirst
 
-  !     c   XFirst=dsqrt(RFirst)
-  !     c   XLast=dsqrt(RLast)
-  !     c   XFirst=RFirst**(1.d0/3.d0)
-  !     c   XLast=RLast**(1.d0/3.d0)
-
-  !     SET UP A LOG-GRID IN THE HYPERRADIUS
-!  XFirst = dlog10(RFirst)
-!  XLast = dlog10(RLast)
-!  StepX=(XLast-XFirst)/(RSteps-1.d0)
-
   allocate(slopes(RSteps,NumStates))
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
@@ -180,12 +169,6 @@ program HHL1DHyperspherical
      R(i) = (RFirst+(i-1)*StepR) !Linear Grid
  !    R(i) = 10.d0**(XFirst+(i-1)*StepX) ! Log Grid
   enddo
-
-  !      if (mod(xNumPoints,2) .ne. 0) then
-  !         write(6,*) 'xNumPoints not divisible by 2'
-  !         xNumPoints = (xNumPoints/2)*2
-  !         write(6,*) '   truncated to ',xNumPoints
-  !      endif
 
   allocate(xLeg(LegPoints),wLeg(LegPoints))
   call GetGaussFactors(LegendreFile,LegPoints,xLeg,wLeg)
@@ -361,6 +344,7 @@ if(troubleshooting.eq.0) then
       write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
       if (CouplingFlag.eq.1) write(201, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates)
       if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
+         print*, 'Looking for sharply avoided crossings.'
          if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
          if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
       endif
@@ -383,22 +367,10 @@ if(troubleshooting.eq.0) then
       endif
 
       if(swapstate2.ne.0) then
-         !swap second detected swapstate in psi
+         call swap_psi(swapstate2,LB%Psi)
+         call swap_psi(swapstate2,CB%Psi)
+         call swap_psi(swapstate2,RB%Psi)
       endif
-      !!^can maybe combine
-
-      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-write(6,*) 'writing the energies'
-
-   !   if (CouplingFlag .eq. 1) write(12,20) (RB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-   !   write(200,20) (CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-   !   if (CouplingFlag .eq. 1) write(11,20) (LB%Energies(i,1), i = 1,NumStates)
-   !   write(201,20) iR*1.0d0,(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-   !   write(202,20) R(iR),(CB%Energies(i,1), i = 1,min(NumStates,iparam(5)))
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
@@ -412,8 +384,6 @@ write(6,*) 'writing the energies'
            write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
            write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
         enddo
-   !      write(107,*) 'Shape(P): ', Shape(P)
-   !      write(107,*) 'Shape(Q): ', Shape(Q)
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -441,11 +411,6 @@ write(6,*) 'writing the energies'
         enddo
         close(unit=999+iR)
      endif
-
-   ! print*, 'shape(CB%energies)', shape(CB%energies)
-   ! print*, 'CB%energies(1,1)', CB%energies(1,1)
-   ! print*, 'CB%energies(80,1)', CB%energies(80,1)
-   ! print*, 'CB%energies(81,1)', CB%energies(81,1)
 
   enddo
 
@@ -480,8 +445,6 @@ endif
    close(11)
    close(200)
    100 close(201)
-
-   !call identify_crossings(slopes, nrg, RSteps, NumStates, R)
 
   deallocate(S_lm, S_mr)
   deallocate(iwork)
@@ -525,10 +488,10 @@ if(iR.lt.RSteps) then
       slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
       slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
       slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
-      print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
-      dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
-      print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
-      dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
+      !print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
+      !dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
+      !print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
+      !dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
       if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
       .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
          print*, 'max_state = ', max_state
@@ -561,80 +524,12 @@ subroutine swap_psi(swapstate, psi)
 implicit none
 double precision psi(80,2)
 integer swapstate, tmp, i
-
 do i = 1,2 !swaps each energy and it's derivative
    tmp = psi(swapstate,i)
    psi(swapstate,i) = psi(swapstate+1,i)
    psi(swapstate+1,i) = tmp
 enddo
-
 end subroutine swap_psi
-
-subroutine Avoided_Crossings(R1,R2,NumStates,R,RSteps,index,swapstate,found_flag,max_state)
-implicit none
-double precision R1(NumStates,2), R2(NumStates,2)
-double precision H1_H2, L1_L2, H2_L2, S_H2L1, S_L2L1, R(RSteps), tmp2, comp_value, deltaR
-integer state, ct, NumStates, tmp_size,i, swapstate, found_flag, max_state, index, RSteps
-
-deltaR = R(index+1)-R(index) ! check to make sure this is correct
-
-print*, '*********max_state =************', max_state
-
-found_flag = 0
-state = max_state
-do while((found_flag.ne.1).and.(state.ne.0))
-!do state = NumStates-1, 1, -1
-   H1_H2 = dabs(R1(state+1,1) - R2(state+1,1)) !Number indicates first or second radius, H and L indicate state
-   L1_L2 = dabs(R1(state,1) - R2(state,1))
-   H2_L2 = dabs(R2(state+1,1)-R2(state,1))
-   S_H2L1 = dabs(R1(state,1) - R2(state+1,1))/dabs(deltaR)
-   S_L2L1 = dabs(R1(state,1) - R2(state,1))/dabs(deltaR)
-
-   !if((nint(H1_H2).eq.0).and.(nint(L1_L2).ne.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
-   !if((nint(H1_H2).ne.nint(L1_L2)).and.(S_H2L1.gt.S_L2L1)) then
-   !print*, 'LOOKING FOR VALUE NEAR: ', comp_value
-   !if (nint(comp_value).eq.nint(R2(state,1))) then
-   if((nint(H1_H2).eq.0).and.(nint(H2_L2).eq.0).and.(S_H2L1.gt.S_L2L1)) then
-      print*, 'State = ', state
-      print*, 'nint(comp_value) = ', nint(comp_value)
-      print*, 'nint(R2(state,1)) = ', nint(R2(state,1))
-
-      found_flag = found_flag+1
-      swapstate = state
-      max_state = state
-      ! print*, 'overwriting array for energy file'
-      ! tmp = tmp_nrg(state,1:tmp_size)
-      ! tmp_nrg(state,1:tmp_size) = tmp_nrg(state+1,1:tmp_size)
-      ! tmp_nrg(state+1,1:tmp_size) = tmp
-      ! print*, 'swapping Energies'
-      ! call swap(state, R1)
-      ! found_flag = found_flag+1
-      ! if(found_flag = 1) then !!need 2 swapstates if two are found to be able to swap psi
-      !    swapstate = state
-      ! endif
-   endif
-   state = state - 1
-enddo
-
-end subroutine Avoided_Crossings
-
-subroutine identify_crossings(slopes,nrg,RSteps, NumStates, R)
-
-integer RSteps, NumStates
-double precision comparison, slopes(RSteps, NumStates), nrg(Rsteps, NumStates), R(RSteps)
-
-do i = 40, RSteps-1 ! 40 corresponds to R(40)~12
-   do j = 3, NumStates-1
-      if ((dabs(slopes(i, j) - slopes(i+1, j+1)).le.(0.5)).and.(dabs(slopes(i, j) - slopes(i+1, j)).ge.(0.95))) then
-         write(75,*) i,R(i),j,j+1
-      endif
-      if (dabs(slopes(i+1,j)-slopes(i,j)).gt.dabs(slopes(i+1,j+1)-slopes(i,j))) then !/(nrg(i,j+1)-nrg(i,j)).gt. then
-         write(76,*) i,R(i),j,j+1
-      endif
-   enddo
-enddo
-
-end subroutine identify_crossings
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
@@ -756,55 +651,34 @@ end function calc_beta
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine calcCouplings_v2(LB, CB, RB, P, Q, S_prim, HalfBandWidth, NumStates, RDerivDelt)
-
- use BasisSets
-
- implicit none
-
- TYPE(basis) LB, CB, RB
- double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
- integer HalfBandWidth, NumStates
- integer ct
-
- integer mu, nu, N_
- double precision P_term_1, Q_term_1, Q_term_2
-
- N_ = CB%xDim+2
-
-!P(mu,nu) = 1/RDerivDelt(P_term_1(mu,nu)-kronecker_delta(mu,nu))
-
+use BasisSets
+implicit none
+TYPE(basis) LB, CB, RB
+double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
+integer HalfBandWidth, NumStates
+integer ct, mu, nu, N_
+double precision P_term_1, Q_term_1, Q_term_2
+N_ = CB%xDim+2
 print*, 'Calculating P matrix...'
-
 do mu = 1, NumStates
    do nu = 1, NumStates
       P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
       P(mu,nu) = 1d0/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
    enddo
 enddo
-
 ct = 0
-
 print*, 'Done Calculating P Matrix!'
-
-!Q(mu,nu) = 1/RDerivDelt**2 * (Q_term_1(mu,nu) + Q_term_2(mu,nu) - 2*kronecker_delta)
-
 print*, 'Calculating Q matrix...'
-
 do mu = 1, NumStates
    do nu = 1, NumStates
       Q_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-      !Q_term_2 = calc_P_term_1(mu,nu, LB, CB, S_prim, HalfBandWidth) !! double check this
       Q_term_2 = calc_P_term_1(mu,nu, CB, LB, S_prim, HalfBandWidth)
       Q(mu,nu) = 1d0/RDerivDelt**2 * (Q_term_1+Q_term_2-2*kronecker_delta(mu,nu))
    enddo
 enddo
-
 ct = 0
-
 print*, 'Done Calculating Q Matrix!'
-
 contains
-
    double precision function kronecker_delta(m,n)
    implicit none
          integer m,n
@@ -814,236 +688,176 @@ contains
             kronecker_delta = 0
          endif
       end function kronecker_delta
-
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   
    double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
       implicit none
       integer mu, nu, HalfBandWidth, i, j
       TYPE(BASIS) CB, RB
       double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
-
       term_1_mu_nu = 0d0
-
       do i = 1, CB%xDim
          do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
             call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
             term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
          enddo
       enddo
-
-      !print*, 'mu,nu, term_1_mu_nu = ', mu,nu, term_1_mu_nu
-
       calc_P_term_1 = term_1_mu_nu
-      !stop
    end function calc_P_term_1
-!!!!!
 end subroutine calcCouplings_v2
 
-subroutine swap_crossings()
-
-! need to swap appropriate values in Psi (matrixdim, ncv)
-! need to swap appropriate values in Energies (ncv, 2)
-! recalculate P and Q matrices (80 x 80)
-
-end subroutine
-
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
+use BasisSets
+implicit none
+TYPE(basis) u, ur
+integer m,n, HalfBandWidth, row, column, tmp
+double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
+S_mn, term_1, term_2, term_3, term_4, testing
+N_ = u%xDim
+m_alpha = u%alpha
+r_alpha = ur%alpha
+m_beta = u%beta
+r_beta = ur%beta
 
-   use BasisSets
+if ((m .gt. 1).and.(m .lt. N_)) then
+   if ((n .gt. 1).and.(n .lt. N_)) then
+      row = m+1
+      column = n+1
+      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      S_mn = term_1
+   else if (n .eq. 1) then !problem case
+      row = 1
+      column = m + 1
+      term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-   implicit none
+      row = 2
+      column = m + 1
+      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-   TYPE(basis) u, ur
+      S_mn = term_1 + term_2
+   else if (n .eq. N_) then
+      row = m + 1
+      column = N_+1
 
-!   double precision function calc_overlap_elem(m,n,m_alpha, r_alpha, m_beta, r_beta, S_prim, HalfBandWidth) ! s passed here is primitive S
-   integer m,n, HalfBandWidth, row, column, tmp
-   double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
-   S_mn, term_1, term_2, term_3, term_4, testing
+      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-   !N_ = u%xDim+2
-   N_ = u%xDim
-   m_alpha = u%alpha
-   r_alpha = ur%alpha
-   m_beta = u%beta
-   r_beta = ur%beta
+      row = m + 1
+      column = N_+2
+      term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-         if ((m .gt. 1).and.(m .lt. N_)) then
-            if ((n .gt. 1).and.(n .lt. N_)) then
-            !print*, 'case 1'
-               row = m+1
-               column = n+1
-               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-               S_mn = term_1
+      S_mn = term_1 + term_2
+   endif
+else if (m .eq. 1) then
+   if ((n .gt. 1).and.(n .lt. N_)) then
+      row = 1
+      column = n+1
+      term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-            else if (n .eq. 1) then !problem case
-               !calc_overlap_elem = r_alpha*S_prim(1,m+1) + S_prim(2,m+1)
-            !print*, 'case 2'
-               row = 1
-               column = m + 1
-               term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = 2
+      column = n+1
+      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               row = 2
-               column = m + 1
-               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      S_mn = term_1 + term_2
+   else if (n .eq. 1) then
+      row = 1
+      column = 1
+      term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               S_mn = term_1 + term_2
+      row = 1
+      column = 2
+      term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-            else if (n .eq. N_) then
-            !print*, 'case 3: m,n ',m,n
-               !calc_overlap_elem = S_prim(row+1,N_+1) + r_beta*S_prim(row+1,N_+2)
-               row = m + 1
-               column = N_+1
+      row = 2
+      column = 1
+      term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = 2
+      column = 2
+      term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               row = m + 1
-               column = N_+2
-               term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      S_mn = term_1+term_2+term_3+term_4
+   else if (n .eq. N_) then
+      row = 1
+      column = N_+1
+      term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-               S_mn = term_1 + term_2
+      row = 1
+      column = N_+2
+      term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-            endif
+      row = 2
+      column = N_+1
+      term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-         else if (m .eq. 1) then
+      row = 2
+      column = N_+2
+      term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-            if ((n .gt. 1).and.(n .lt. N_)) then !problem case
-               !print*, 'case 4'
-               !calc_overlap_elem = m_alpha*S_prim(1,column+1) + S_prim(2,column+1)
-               row = 1
-               column = n+1
-               term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      S_mn = term_1+term_2+term_3+term_4
+   endif
+else if(m .eq. N_) then
+   if ((n .gt. 1).and.(n .lt. N_)) then
+      row = N_+1
+      column = n+1
+      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               row = 2
-               column = n+1
-               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = N_+2
+      column = n+1
+      term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-               S_mn = term_1 + term_2
+      S_mn = term_1+term_2
+   else if (n .eq. 1) then
+      row = N_+1
+      column = 1
+      term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-            else if (n .eq. 1) then
-               !print*, 'case 5'
-               !calc_overlap_elem = m_alpha*r_alpha*S_prim(1,1)+m_alpha*S_prim(1,2)+r_alpha*S_prim(2,1)+S_prim(2,2)
-               row = 1
-               column = 1
-               term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = N_+2
+      column = 2
+      term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-               row = 1
-               column = 2
-               term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = N_+2
+      column = 1
+      term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-               row = 2
-               column = 1
-               term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      row = N_+2
+      column = 2
+      term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-               row = 2
-               column = 2
-               term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-
-               S_mn = term_1+term_2+term_3+term_4
-
-            else if (n .eq. N_) then
-               !print*, 'case 6'
-               !calc_overlap_elem = m_alpha*S_prim(1,N_+1)+ m_alpha*r_beta*S_prim(1,N_+2)+S_prim(2,N+1)+r_beta*S_prim(2,N+2)
-               row = 1
-               column = N_+1
-               term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = 1
-               column = N_+2
-               term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = 2
-               column = N_+1
-               term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = 2
-               column = N_+2
-               term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               S_mn = term_1+term_2+term_3+term_4
-
-            endif
-
-         else if(m .eq. N_) then
-
-            if ((n .gt. 1).and.(n .lt. N_)) then
-               !print*, 'case 7'
-               !calc_overlap_elem = S_prim(N_+1,column+1) + m_beta*S_prim(N_+2,column+1)
-               row = N_+1
-               column = n+1
-               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-
-               row = N_+2
-               column = n+1
-               term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
-
-               S_mn = term_1+term_2
-
-            else if (n .eq. 1) then
-               !print*, 'case 8'
-               !calc_overlap_elem = r_alpha*S_prim(N_+1,1)+S_prim(N+1,2)+r_alpha*m_beta*S_prim(N_+2,1)+m_beta*S_prim(N+2,2)
-               row = N_+1
-               column = 1
-               term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = N_+2
-               column = 2
-               term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = N_+2
-               column = 1
-               term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               row = N_+2
-               column = 2
-               term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
-
-               S_mn = term_1+term_2+term_3+term_4
-
-            else if (n .eq. N_) then
-               !print*, 'case 9'
-               !calc_overlap_elem = S_prim(N_+1,N_+1)+S_prim(N_+1,N_+2)*(m_beta+r_beta)+m_beta*r_beta*S_prim(N_+2,N_+2)
-               row = N_+1
-               column = N_+1
-               term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+      S_mn = term_1+term_2+term_3+term_4
+   else if (n .eq. N_) then
+      row = N_+1
+      column = N_+1
+      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
                
-               row = N_+1
-               column = N_+2
-               term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
+      row = N_+1
+      column = N_+2
+      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
 
-               row = N_+2
-               column = N_+2
-               term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+      row = N_+2
+      column = N_+2
+      term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
 
-               S_mn = term_1+term_2+term_3
-
-            endif
-         endif
+      S_mn = term_1+term_2+term_3
+   endif
+endif
 
 contains
-
-   double precision function banded_zeros_check(row,col,HalfBandWidth,S_prim)
+double precision function banded_zeros_check(row,col,HalfBandWidth,S_prim)
    implicit none
-         integer row, col, HalfBandWidth, newRow, tmp
-         double precision S_prim(:,:)
-         
-         if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
-             banded_zeros_check = 0d0
-         else
-            if(row .gt. col) then
-               tmp = row
-               row = col
-               col = tmp
-            endif
-            newRow = HalfBandWidth + 1 + (row - col)
-            banded_zeros_check = S_prim(newRow, col)
-         endif
-
-   end function banded_zeros_check
+   integer row, col, HalfBandWidth, newRow, tmp
+   double precision S_prim(:,:)
+   if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
+      banded_zeros_check = 0d0
+   else
+      if(row .gt. col) then
+         tmp = row
+         row = col
+         col = tmp
+      endif
+      newRow = HalfBandWidth + 1 + (row - col)
+      banded_zeros_check = S_prim(newRow, col)
+   endif
+end function banded_zeros_check
 
 end subroutine calc_overlap_elem
-
-!!!!!!!!!!!!!!!!!!!!!!
-
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
