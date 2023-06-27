@@ -61,6 +61,7 @@ program HHL1DHyperspherical
    double precision, allocatable :: xPoints(:)
    double precision, allocatable :: slopes(:,:)
    double precision, allocatable :: curr_nrg(:,:)
+   REAL t1, t2
 
    logical, allocatable :: Select(:)
 
@@ -240,6 +241,7 @@ if(troubleshooting.eq.0) then
    CrossingFlag = 1
    RChange=100.d0
    do iR = RSteps,1,-1 !RSteps
+      call CPU_TIME(t1)
       NumFirst=NumStates
       if (R(iR).gt.RChange) then
          NumFirst=NumBound
@@ -361,15 +363,15 @@ if(troubleshooting.eq.0) then
       endif
 
       if(swapstate1.ne.0) then
-         call swap_psi(swapstate1,LB%Psi)
-         call swap_psi(swapstate1,CB%Psi)
-         call swap_psi(swapstate1,RB%Psi)
+         call swap_psi(swapstate1,LB%Psi, xDim, ncv)
+         call swap_psi(swapstate1,CB%Psi, xDim, ncv)
+         call swap_psi(swapstate1,RB%Psi, xDim, ncv)
       endif
 
       if(swapstate2.ne.0) then
-         call swap_psi(swapstate2,LB%Psi)
-         call swap_psi(swapstate2,CB%Psi)
-         call swap_psi(swapstate2,RB%Psi)
+         call swap_psi(swapstate2,LB%Psi, xDim, ncv)
+         call swap_psi(swapstate2,CB%Psi, xDim, ncv)
+         call swap_psi(swapstate2,RB%Psi, xDim, ncv)
       endif
 
    write(6,*) 'Calculating the overlaps and couplings!'
@@ -411,6 +413,9 @@ if(troubleshooting.eq.0) then
         enddo
         close(unit=999+iR)
      endif
+
+   call CPU_TIME(t2)
+   print*, 'Remaining time (min): ', (t2-t1)*iR/60
 
   enddo
 
@@ -475,7 +480,7 @@ subroutine Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapsta
 use BasisSets
 implicit none
 type(BASIS) CB, LB, RB
-double precision RDerivDelt, R(RSteps), slopes(2,2)
+double precision RDerivDelt, R(RSteps), slopes(2,2), num, den, tmp
 integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag
 
 if(iR.lt.RSteps) then
@@ -488,10 +493,11 @@ if(iR.lt.RSteps) then
       slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
       slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
       slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
-      !print*, 'dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))=',&
-      !dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))
-      !print*, 'and (dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2)) =',&
-      !dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))
+      !num = dabs(LB%nrg_mat(iR, state+1)-CB%nrg_mat(iR, state+1))/RDerivDelt -&
+      !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state+1))/RDerivDelt
+      !den = dabs(LB%nrg_mat(iR, state+1)-CB%nrg_mat(iR, state+1))/RDerivDelt -&
+      !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state))/RDerivDelt
+      !print*, 'num/den = ',num/den
       if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
       .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
          print*, 'max_state = ', max_state
@@ -503,6 +509,17 @@ if(iR.lt.RSteps) then
          call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
          found_flag = found_flag+1
          max_state = state
+      !else if(num/den.gt.100) then
+      !   print*, 'swap at subtriade'
+      !   swapstate = state
+      !    call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+      !    call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+      !    call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+      !    tmp = RB%nrg_mat(iR, state)
+      !    RB%nrg_mat(iR, state) = RB%nrg_mat(iR, state+1)
+      !    RB%nrg_mat(iR, state+1) = tmp
+      !    found_flag = found_flag+1
+      !    max_state = state
       endif
       state = state - 1
    enddo
@@ -520,15 +537,15 @@ do i = iR+1, RSteps
 enddo
 end subroutine swap_full
 
-subroutine swap_psi(swapstate, psi)
+subroutine swap_psi(swapstate, psi, xDim, ncv)
 implicit none
-double precision psi(80,2)
-integer swapstate, tmp, i
-do i = 1,2 !swaps each energy and it's derivative
-   tmp = psi(swapstate,i)
-   psi(swapstate,i) = psi(swapstate+1,i)
-   psi(swapstate+1,i) = tmp
-enddo
+double precision psi(xDim,ncv), tmp(xDim)
+integer swapstate, i, xDim, ncv
+
+tmp = psi(:,swapstate)
+psi(:,swapstate) = psi(:,swapstate+1)
+psi(:,swapstate+1) = tmp
+
 end subroutine swap_psi
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
