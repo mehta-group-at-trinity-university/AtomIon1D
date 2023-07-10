@@ -9,6 +9,7 @@ TYPE basis
    double precision, allocatable :: H(:,:)
    double precision, allocatable :: Psi(:,:),Energies(:,:)
    double precision, allocatable :: nrg_mat(:,:)
+   double precision, allocatable :: psi_mat(:,:)
    double precision alpha, beta
    integer, allocatable :: xBounds(:)
 END TYPE basis
@@ -42,6 +43,7 @@ contains
       deallocate(T%H)
       deallocate(T%Psi)
       deallocate(T%Energies)
+      deallocate(T%nrg_mat)
    end subroutine deAllocateBasis
 end module BasisSets
 
@@ -52,21 +54,23 @@ program HHL1DHyperspherical
    TYPE(basis) CB
    TYPE(basis) LB
    TYPE(basis) RB
-   double precision tmp, tmp1, tmp2
-   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2
+   TYPE(basis) CB_old
+   double precision tmp, tmp1, tmp2, S_ij
+   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, mu1, nu1, pqflag
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
+   integer, allocatable :: op_mat(:,:), op_mat_old(:,:)
    double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
    double precision, allocatable :: R(:)
    double precision, allocatable :: xPoints(:)
    double precision, allocatable :: slopes(:,:)
-   double precision, allocatable :: curr_nrg(:,:)
+   double precision, allocatable :: tmp_energies(:), tmp_psi(:)
    REAL t1, t2
 
    logical, allocatable :: Select(:)
 
    integer swapstate,iparam(11),ncv,info,troubleshooting, swapstate1, swapstate2
-   integer i,j,k,iR,NumFirst,NumBound
+   integer i,j,k,iR,NumFirst,NumBound, swapped_flag
    integer LeadDim,MatrixDim,HalfBandWidth
    integer xDim, Nbs
    integer, allocatable :: iwork(:)
@@ -217,12 +221,14 @@ program HHL1DHyperspherical
   Tol=1e-20
 
   NumBound=0
+  swapped_flag = 0
 
    call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates, RSteps)
    call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
    if (CouplingFlag .ne. 0) then
       call AllocateBasis(LB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
       call AllocateBasis(RB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
+      call AllocateBasis(CB_old,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
       write(6,*) 'Left, right basis splines allocated.'
    end if
 
@@ -232,11 +238,16 @@ program HHL1DHyperspherical
    open(unit = 102, file = "Q_Matrix.dat")
 
 troubleshooting = 0
-   allocate(curr_nrg(RSteps,NumStates))
+   allocate(op_mat(NumStates, NumStates))
+   allocate(op_mat_old(NumStates, NumStates))
+   allocate(tmp_energies(NumStates))
+   allocate(tmp_psi(NumStates))
    swapstate = 0
-   max_state = 79
-   max_state1 = 79
-   max_state2 = 79
+   swapstate1 = 0
+   swapstate2 = 0
+   max_state = NumStates-1
+   max_state1 = NumStates-1
+   max_state2 = NumStates-1
 if(troubleshooting.eq.0) then
    CrossingFlag = 1
    RChange=100.d0
@@ -337,45 +348,76 @@ if(troubleshooting.eq.0) then
          call MyDsband(Select,RB%Energies,RB%Psi,MatrixDim,Shift,MatrixDim,RB%H,RB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
             NumStates,Tol,Residuals,ncv,RB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
       endif
-      do i = 1, NumStates
-         if (CouplingFlag.eq.1) LB%nrg_mat(iR,i) = LB%Energies(i,1)
-         CB%nrg_mat(iR,i) = CB%Energies(i,1)
-         if (CouplingFlag.eq.1) RB%nrg_mat(iR,i) = RB%Energies(i,1)
-      enddo
+         do i = 1, NumStates
+            if (CouplingFlag.eq.1) LB%nrg_mat(iR,i) = LB%Energies(i,1)
+            CB%nrg_mat(iR,i) = CB%Energies(i,1)
+            if (CouplingFlag.eq.1) RB%nrg_mat(iR,i) = RB%Energies(i,1)
+         enddo
+         if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
+            print*, 'Looking for sharply avoided crossings.'
+            if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
+            if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
+         endif !!Swapstates found
+      if(iR.eq.RSteps) then
+         do i = NumStates, 1, -1
+            do j = 1, NumStates
+               if (i.eq.j) op_mat_old(i,j) = 1
+               if (i.ne.j) op_mat_old(i,j) = 0
+            enddo
+         enddo
+      endif
+      if(swapstate1 .ne. 0) then
+         call populate_operator(op_mat, swapstate1, NumStates) !make new operator
+         op_mat = matmul(op_mat_old, op_mat) !multiply previous with new operator
+         swapped_flag = 1 ! if just one state needs to be swapped, then every iteration after must be swapped
+         write(401, *) '************************************'
+         do i = 1, 20
+            write(401, *) (op_mat(i,j), j = 1, 20)
+         enddo
+      endif
+      if(swapstate2.ne.0) then
+         call populate_operator(op_mat, swapstate2, NumStates) !make new operator
+         op_mat = matmul(op_mat_old,op_mat) !multiply previous with new operator
+      endif
+      if(swapped_flag .eq. 1) then
+         print*, 'swapping energies'
+         tmp_energies = CB%energies(1:NumStates,1)
+         CB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         tmp_energies = RB%energies(1:NumStates,1)
+         RB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         tmp_energies = LB%energies(1:NumStates,1)
+         LB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         print*, 'swapping psis'
+         do i = 1, xDim
+            tmp_psi = CB%Psi(i, 1:NumStates)
+            CB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+            tmp_psi = LB%Psi(i, 1:NumStates)
+            LB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+            tmp_psi = RB%Psi(i, 1:NumStates)
+            RB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+         enddo
+         op_mat_old = op_mat !ready the new operator for next iteration
+      endif
+
       if (CouplingFlag.eq.1) write(201, 20) RRight, (RB%Energies(i,1), i = 1,NumStates) !writing original energies to og_energies.dat
       write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
       if (CouplingFlag.eq.1) write(201, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates)
-      if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
-         print*, 'Looking for sharply avoided crossings.'
-         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
-         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
-      endif
+
       if(iR .ne. RSteps) then
          call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
       endif
       oldPsi = CB%Psi
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
       if (CouplingFlag.eq.1) then
-         call FixPhase(NumStates,HalfBandWidth,MatrixDim,LB%S,ncv,CB%Psi,LB%Psi)
+         call FixPhase(NumStates,HalfBandWidth,MatrixDim,LB%S,ncv,oldPsi,LB%Psi)
          call CalcEigenErrors(info,iparam,MatrixDim,LB%H,HalfBandWidth+1,LB%S,HalfBandWidth,NumStates,LB%Psi,LB%Energies,ncv)
-         call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,CB%Psi,RB%Psi)
+         call FixPhase(NumStates,HalfBandWidth,MatrixDim,RB%S,ncv,oldPsi,RB%Psi)
          call CalcEigenErrors(info,iparam,MatrixDim,RB%H,HalfBandWidth+1,RB%S,HalfBandWidth,NumStates,RB%Psi,RB%Energies,ncv)
-      endif
-
-      if(swapstate1.ne.0) then
-         call swap_psi(swapstate1,LB%Psi, xDim, ncv)
-         call swap_psi(swapstate1,CB%Psi, xDim, ncv)
-         call swap_psi(swapstate1,RB%Psi, xDim, ncv)
-      endif
-
-      if(swapstate2.ne.0) then
-         call swap_psi(swapstate2,LB%Psi, xDim, ncv)
-         call swap_psi(swapstate2,CB%Psi, xDim, ncv)
-         call swap_psi(swapstate2,RB%Psi, xDim, ncv)
       endif
 
    write(6,*) 'Calculating the overlaps and couplings!'
 
+   write(155, *) '***At R(iR) =', R(iR), '***'
    call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
         write(101,*) R(iR)
@@ -386,6 +428,20 @@ if(troubleshooting.eq.0) then
            write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
            write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
         enddo
+
+
+      if(swapstate1.ne.0) then
+         write(610,*) 'Swap1: R(iR) =', R(iR)
+        do i = swapstate1,swapstate1+1
+           write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
+        enddo
+      endif
+      if(swapstate1.ne.0) then
+         write(610,*) 'Swap2: R(iR) =', R(iR)
+        do i = swapstate1,swapstate1+1
+           write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
+        enddo
+      endif
 
      write(6,*)
      write(6,*) 'RMid = ', R(iR)
@@ -420,9 +476,16 @@ if(troubleshooting.eq.0) then
   enddo
 
    do iR = RSteps, 1, -1
+      !write(301, 20) CB%psi(iR, j) !compare psi matrices with and without psi_mat vs psi
       write(200,20) R(iR)+RDerivDelt, (RB%nrg_mat(iR,j), j=1, NumStates)
       write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
       write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
+   enddo
+   do iR = RSteps*xDim, 1, -1
+      !write(301, 20) CB%psi(iR, j) !compare psi matrices with and without psi_mat vs psi
+      write(300,20) (RB%psi_mat(iR,j), j=1, NumStates)
+      write(300,20) (CB%psi_mat(iR,j), j=1, NumStates)
+      write(300,20) (LB%psi_mat(iR,j), j=1, NumStates)
    enddo
 
 endif
@@ -445,10 +508,17 @@ endif
          write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
          write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
       enddo
+
+      call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+   
    endif
 
    close(11)
+   close(101)
+   close(102)
    close(200)
+   close(300)
+   close(301)
    100 close(201)
 
   deallocate(S_lm, S_mr)
@@ -476,6 +546,21 @@ endif
   stop
 end program HHL1DHyperspherical
 
+subroutine populate_operator(op,i, NumStates)
+implicit none
+integer x,y,NumStates, op(NumStates,Numstates),i
+do x = 1, NumStates
+   do y = 1, NumStates
+      if(x.eq.y) op(x,y) = 1
+      if(x.ne.y) op(x,y) = 0
+   enddo
+enddo
+op(i,i) = 0
+op(i, i+1) = 1
+op(i+1,i) = 1
+op(i+1, i+1) = 0
+end subroutine populate_operator
+
 subroutine Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
 use BasisSets
 implicit none
@@ -497,7 +582,6 @@ if(iR.lt.RSteps) then
       !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state+1))/RDerivDelt
       !den = dabs(LB%nrg_mat(iR, state+1)-CB%nrg_mat(iR, state+1))/RDerivDelt -&
       !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state))/RDerivDelt
-      !print*, 'num/den = ',num/den
       if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
       .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
          print*, 'max_state = ', max_state
@@ -509,6 +593,7 @@ if(iR.lt.RSteps) then
          call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
          found_flag = found_flag+1
          max_state = state
+      !!section below can find *some* crossings that occur within triade!!
       !else if(num/den.gt.100) then
       !   print*, 'swap at subtriade'
       !   swapstate = state
@@ -539,13 +624,18 @@ end subroutine swap_full
 
 subroutine swap_psi(swapstate, psi, xDim, ncv)
 implicit none
-double precision psi(xDim,ncv), tmp(xDim)
+double precision psi(xDim,ncv), tmp!(xDim)
 integer swapstate, i, xDim, ncv
 
-tmp = psi(:,swapstate)
-psi(:,swapstate) = psi(:,swapstate+1)
-psi(:,swapstate+1) = tmp
+do i = 1, xDim
+   tmp = psi(i, swapstate)
+   psi(i, swapstate) = sign(psi(i, swapstate+1), psi(i, swapstate)) !return value of psi+1 but with original sign of psi
+   psi(i, swapstate+1) = sign(tmp, psi(i, swapstate+1)) !return value of psi, but with original sign of psi+1
+enddo
 
+! tmp = psi(:,swapstate)
+! psi(:,swapstate) = psi(:,swapstate+1)
+! psi(:,swapstate+1) = tmp
 end subroutine swap_psi
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -681,6 +771,9 @@ do mu = 1, NumStates
    do nu = 1, NumStates
       P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
       P(mu,nu) = 1d0/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
+      if(dabs(P(mu,nu)).ge.0.01) then
+         write(155, *) 'mu =', mu, 'nu = ', nu
+      endif
    enddo
 enddo
 ct = 0
@@ -711,15 +804,30 @@ contains
       TYPE(BASIS) CB, RB
       double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
       term_1_mu_nu = 0d0
+      !print*, 'LOOKING FOR NEGATIVE VALUES OF S_ij'
       do i = 1, CB%xDim
          do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
             call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
-            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
+            !if (nu .eq. 9) print*, 'S_ij = ', S_ij
+            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu)) !!!check for identity matrix t(R1,R1) mu,nu
+            !if (nu .eq. 9) print*, 'term_1_mu_nu = ', term_1_mu_nu
+            !if (nu .eq. 9) print*, 'CB%Psi(i,mu) = ', CB%Psi(i,mu)
+            !if (nu .eq. 9) print*, 'CB%Psi(j,nu) = ', CB%Psi(j,nu)
+            !if (nu .eq. 9) print*, 'CB%Psi(i,mu)*CB%Psi(j,nu) = ', CB%Psi(i,mu)*CB%Psi(j,nu)
+            !if (S_ij.lt.0) print*, 'S_ij=', S_ij
          enddo
       enddo
+      !print*, '1/RDerivDelt*term_1_mu_nu=', term_1_mu_nu*(1/.0001)
+      !if (nu .eq. 9) stop
       calc_P_term_1 = term_1_mu_nu
    end function calc_P_term_1
 end subroutine calcCouplings_v2
+
+!subroutine calcpsandqs(LBarray, CBarray, RBarray, PBArray, HalfBandWidth, NumStates, RDerivDelt) !!see if you can make an array with type bases...
+
+!   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+
+!end subroutine
 
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 use BasisSets
@@ -1144,6 +1252,7 @@ subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,mPsi,rPsi)
      if (Phase .lt. 0.0d0) then
         do j = 1,MatrixDim
            rPsi(j,i) = -rPsi(j,i)
+           write(170) 'phase fix at: ', 'j=',j, 'i=',i
         enddo
      endif
   enddo
@@ -1236,7 +1345,7 @@ end subroutine GridMakerHHL
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   implicit none
-  integer xNumPoints
+  integer xNumPoints, testing
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
   double precision mu12,mu123,theta_c,Rstar,sbc
   integer i,j,k,OPGRID,NP
@@ -1250,11 +1359,14 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   !r0New=r0*2.0d0
   deltax = 0.2d0*Rstar/R
 
+   !testing = 1
 
   OPGRID=0
+
   NP = xNumPoints/4
   if(deltax.ge.(xMax - xMin)*0.25d0) then
-     write(6,*) 'Switching to linear grid...'
+  !if (testing.eq.1) then
+     write(6,*) 'Switching to linear grid...' !PRINT WHERE (RADIUS) THIS SWITCH OCCURS !maybe try without optimization, use linear grid everywhere
      write(6,*) 'deltax = ', deltax
      write(6,*) 'deltax = ', deltax
      OPGRID = 0
@@ -1269,7 +1381,7 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   !      write(6,*) 'x2 = ', x2
   !      write(6,*) 'x3 = ', x3
   if((OPGRID.eq.1)) then
-     !         write(6,*) "using modified grid:(R,deltax) = ", R, deltax
+     write(6,*) "using modified grid:(R,deltax) = ", R, deltax
 
      k = 1
      xDelt = (x1-x0)
