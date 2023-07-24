@@ -56,21 +56,24 @@ program HHL1DHyperspherical
    TYPE(basis) RB
    TYPE(basis) CB_old
    double precision tmp, tmp1, tmp2, S_ij
-   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, mu1, nu1, pqflag
+   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
+   integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
-   integer, allocatable :: op_mat(:,:), op_mat_old(:,:)
+   integer, allocatable :: op_mat_1(:,:), op_mat_old_1(:,:)
+   integer, allocatable :: op_mat_2(:,:), op_mat_old_2(:,:)
    double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
    double precision, allocatable :: R(:)
    double precision, allocatable :: xPoints(:)
    double precision, allocatable :: slopes(:,:)
    double precision, allocatable :: tmp_energies(:), tmp_psi(:)
+   integer, allocatable :: OneToEighty(:)
    REAL t1, t2
 
    logical, allocatable :: Select(:)
 
    integer swapstate,iparam(11),ncv,info,troubleshooting, swapstate1, swapstate2
-   integer i,j,k,iR,NumFirst,NumBound, swapped_flag
+   integer i,j,k,iR,NumFirst,NumBound, swapped_flag_1, swapped_flag_2
    integer LeadDim,MatrixDim,HalfBandWidth
    integer xDim, Nbs
    integer, allocatable :: iwork(:)
@@ -216,12 +219,14 @@ program HHL1DHyperspherical
   allocate(workl(ncv*ncv+8*ncv))
   allocate(workd(3*MatrixDim))
   allocate(Residuals(MatrixDim))
+  allocate(OneToEighty(NumStates))
   info = 0
   iR=1
   Tol=1e-20
 
   NumBound=0
-  swapped_flag = 0
+  swapped_flag_1 = 0
+  swapped_flag_2 = 0
 
    call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates, RSteps)
    call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
@@ -232,14 +237,43 @@ program HHL1DHyperspherical
       write(6,*) 'Left, right basis splines allocated.'
    end if
 
-   open(unit = 200, file = "energies.dat")
-   open(unit = 201, file = "og_energies.dat")
+   open(unit = 203, file = "ad_energies.dat") !printout of raw energies without diabatization method
+   open(unit = 200, file = "energiesv1.dat") !version 1 uses "tail swapping" method (diabats correspond to states 1 and 2)
+   open(unit = 201, file = "energiesv2.dat") !version 2 uses "operator-on-the-fly" method (diabats correspond to states 79 and 80)
    open(unit = 101, file = "P_Matrix.dat")
    open(unit = 102, file = "Q_Matrix.dat")
 
+!! uncomment to swap Q file
+! call reorder_Q2(3, 79, NumStates, RSteps) !state_L = 3, state_H = 79; switches 2, where 80 -> 3, 79 -> 4
+! stop
+!!
+
+!! uncomment to swap P file
+! call reorder_P2(3, 79, NumStates, RSteps) !state_L = 3, state_H = 79; switches 2, where 80 -> 3, 79 -> 4
+! stop
+!!
+
+! !!uncomment to delete triads in nrg printout
+!       do iR = RSteps*3,1,-3
+!          read(201,*,END=101) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
+!          read(201,*,END=101) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
+!          read(201,*, END=101) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
+!       enddo
+!       do iR = RSteps, 1, -1
+!          !write(60,20) R(iR)+0.0001d0, (RB%nrg_mat(iR,j), j=1, NumStates)
+!          write(304,*) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
+!          !write(60,20) R(iR)-0.0001d0, (LB%nrg_mat(iR,j), j=1, NumStates)
+!       enddo
+
+!    close(200)
+!    101 close(201)
+!    stop
+
 troubleshooting = 0
-   allocate(op_mat(NumStates, NumStates))
-   allocate(op_mat_old(NumStates, NumStates))
+   allocate(op_mat_1(NumStates, NumStates))
+   allocate(op_mat_old_1(NumStates, NumStates))
+   allocate(op_mat_2(NumStates, NumStates))
+   allocate(op_mat_old_2(NumStates, NumStates))
    allocate(tmp_energies(NumStates))
    allocate(tmp_psi(NumStates))
    swapstate = 0
@@ -265,10 +299,9 @@ if(troubleshooting.eq.0) then
       RLeft = R(iR)-RDerivDelt !make grid based on leftmost point
       print*, 'calling GridMaker.'
       if (CouplingFlag .eq. 0) then
-         xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb, using R(iR) because coupling is off.
-         xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) ! ''
+         xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
+         xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
       endif
-
       if (CouplingFlag .eq. 1) then
          xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! Now based on RLeft and fixed sNb.
          xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/RLeft*(Rstar/lho)) ! ''
@@ -353,53 +386,88 @@ if(troubleshooting.eq.0) then
             CB%nrg_mat(iR,i) = CB%Energies(i,1)
             if (CouplingFlag.eq.1) RB%nrg_mat(iR,i) = RB%Energies(i,1)
          enddo
+         if (CouplingFlag.eq.1) write(203, 20) R(iR), (RB%Energies(i,1), i = 1,NumStates) !!
+         write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !!New: writing un-diabatized energies for comparison in poster plot
+         if (CouplingFlag.eq.1) write(203, 20) R(iR), (LB%Energies(i,1), i = 1,NumStates) !!
          if((CrossingFlag.eq.1).and.(CouplingFlag.eq.1)) then
             print*, 'Looking for sharply avoided crossings.'
-            if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
-            if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
-         endif !!Swapstates found
+            !if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1)
+            !if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2)
+            if(R(iR).gt.5) call Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1,&
+            0, curr_overlaps, last_overlaps, 1)
+            last_overlaps(1) = curr_overlaps(1)
+            if(R(iR).gt.5) call Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2,&
+            max_state1, curr_overlaps, last_overlaps, 2)!2 is for second adiabat
+            last_overlaps(2) = curr_overlaps(2)
+            endif !!Swapstates found
       if(iR.eq.RSteps) then
          do i = NumStates, 1, -1
             do j = 1, NumStates
-               if (i.eq.j) op_mat_old(i,j) = 1
-               if (i.ne.j) op_mat_old(i,j) = 0
+               if (i.eq.j) op_mat_old_1(i,j) = 1
+               if (i.ne.j) op_mat_old_1(i,j) = 0
+               if (i.eq.j) op_mat_old_2(i,j) = 1
+               if (i.ne.j) op_mat_old_2(i,j) = 0
             enddo
+            OneToEighty(i) = i
          enddo
       endif
       if(swapstate1 .ne. 0) then
-         call populate_operator(op_mat, swapstate1, NumStates) !make new operator
-         op_mat = matmul(op_mat_old, op_mat) !multiply previous with new operator
-         swapped_flag = 1 ! if just one state needs to be swapped, then every iteration after must be swapped
-         write(401, *) '************************************'
-         do i = 1, 20
-            write(401, *) (op_mat(i,j), j = 1, 20)
-         enddo
+         call populate_operator(op_mat_1, swapstate1, NumStates) !make new operator
+         op_mat_1 = matmul((op_mat_old_1), (op_mat_1)) !multiply previous with new operator
+         swapped_flag_1 = 1 ! if just one state needs to be swapped, then every iteration after must be swapped
       endif
       if(swapstate2.ne.0) then
-         call populate_operator(op_mat, swapstate2, NumStates) !make new operator
-         op_mat = matmul(op_mat_old,op_mat) !multiply previous with new operator
+         call populate_operator(op_mat_2, swapstate2, NumStates) !make new operator
+         op_mat_2 = matmul((op_mat_old_2),(op_mat_2)) !multiply previous with new operator
+         swapped_flag_2 = 1
       endif
-      if(swapped_flag .eq. 1) then
+
+      if(swapped_flag_2 .eq. 1) then
+         OneToEighty = matmul(op_mat_2, OneToEighty)
          print*, 'swapping energies'
          tmp_energies = CB%energies(1:NumStates,1)
-         CB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         CB%energies(1:NumStates,1) = (matmul(op_mat_2, tmp_energies))
          tmp_energies = RB%energies(1:NumStates,1)
-         RB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         RB%energies(1:NumStates,1) = (matmul(op_mat_2, tmp_energies))
          tmp_energies = LB%energies(1:NumStates,1)
-         LB%energies(1:NumStates,1) = (matmul(op_mat, tmp_energies))
+         LB%energies(1:NumStates,1) = (matmul(op_mat_2, tmp_energies))
          print*, 'swapping psis'
          do i = 1, xDim
             tmp_psi = CB%Psi(i, 1:NumStates)
-            CB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+            CB%Psi(i, 1:NumStates) = matmul(op_mat_2, tmp_psi)
             tmp_psi = LB%Psi(i, 1:NumStates)
-            LB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+            LB%Psi(i, 1:NumStates) = matmul(op_mat_2, tmp_psi)
             tmp_psi = RB%Psi(i, 1:NumStates)
-            RB%Psi(i, 1:NumStates) = matmul(op_mat, tmp_psi)
+            RB%Psi(i, 1:NumStates) = matmul(op_mat_2, tmp_psi)
          enddo
-         op_mat_old = op_mat !ready the new operator for next iteration
+         op_mat_old_2 = op_mat_2 !ready the new operator for next iteration
+      endif
+      if(swapped_flag_1 .eq. 1) then
+         OneToEighty = matmul(op_mat_1, OneToEighty)
+         print*, 'swapping energies'
+         tmp_energies = CB%energies(1:NumStates,1)
+         CB%energies(1:NumStates,1) = (matmul(op_mat_1, tmp_energies))
+         tmp_energies = RB%energies(1:NumStates,1)
+         RB%energies(1:NumStates,1) = (matmul(op_mat_1, tmp_energies))
+         tmp_energies = LB%energies(1:NumStates,1)
+         LB%energies(1:NumStates,1) = (matmul(op_mat_1, tmp_energies))
+         print*, 'swapping psis'
+         do i = 1, xDim
+            tmp_psi = CB%Psi(i, 1:NumStates)
+            CB%Psi(i, 1:NumStates) = matmul(op_mat_1, tmp_psi)
+            tmp_psi = LB%Psi(i, 1:NumStates)
+            LB%Psi(i, 1:NumStates) = matmul(op_mat_1, tmp_psi)
+            tmp_psi = RB%Psi(i, 1:NumStates)
+            RB%Psi(i, 1:NumStates) = matmul(op_mat_1, tmp_psi)
+         enddo
+         op_mat_old_1 = op_mat_1 !ready the new operator for next iteration
       endif
 
-      if (CouplingFlag.eq.1) write(201, 20) RRight, (RB%Energies(i,1), i = 1,NumStates) !writing original energies to og_energies.dat
+      if((swapstate1.ne.0).or.(swapstate1.ne.0)) then
+         write(306, *) (OnetoEighty(i), i = 1, NumStates)
+      endif
+
+      if (CouplingFlag.eq.1) write(201, 20) RRight, (RB%Energies(i,1), i = 1,NumStates) !writing energies to og_energies.dat
       write(201, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates)
       if (CouplingFlag.eq.1) write(201, 20) RLeft, (LB%Energies(i,1), i = 1,NumStates)
 
@@ -429,18 +497,19 @@ if(troubleshooting.eq.0) then
            write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
         enddo
 
-
       if(swapstate1.ne.0) then
          write(610,*) 'Swap1: R(iR) =', R(iR)
-        do i = swapstate1,swapstate1+1
-           write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
-        enddo
+        !do i = swapstate1
+           !write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
+           write(610,*) 'swapstate1 = ', swapstate1
+        !enddo
       endif
-      if(swapstate1.ne.0) then
+      if(swapstate2.ne.0) then
          write(610,*) 'Swap2: R(iR) =', R(iR)
-        do i = swapstate1,swapstate1+1
-           write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
-        enddo
+        !do i = swapstate1
+           !write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
+           write(610,*) 'swapstate2 = ', swapstate2
+        !enddo
       endif
 
      write(6,*)
@@ -481,35 +550,33 @@ if(troubleshooting.eq.0) then
       write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
       write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
    enddo
-   do iR = RSteps*xDim, 1, -1
-      !write(301, 20) CB%psi(iR, j) !compare psi matrices with and without psi_mat vs psi
-      write(300,20) (RB%psi_mat(iR,j), j=1, NumStates)
-      write(300,20) (CB%psi_mat(iR,j), j=1, NumStates)
-      write(300,20) (LB%psi_mat(iR,j), j=1, NumStates)
-   enddo
 
 endif
 
-   open(201)
+   open(203)
 
    if(troubleshooting.eq.1) then
       do iR = RSteps*3,1,-3
-         read(201,*,END=100) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
-         read(201,*,END=100) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
-         read(201,*, END=100) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(203,*,END=100) tmp, (RB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(203,*,END=100) tmp, (CB%nrg_mat(iR/3,j), j=1,NumStates)
+         read(203,*, END=100) tmp, (LB%nrg_mat(iR/3,j), j=1,NumStates)
       enddo
+      100 close(203)
+      swapstate1 = 0
+      swapstate2 = 0
       do iR = RSteps, 1,-1
-         print*, '************NEW LOOP*************'
-         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state1)
-         if(R(iR).gt.10) call Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state2)
+         if(R(iR).gt.5) call Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate1,max_state1,&
+         0, curr_overlaps, last_overlaps, 1)
+         last_overlaps(1) = curr_overlaps(1)
+         if(R(iR).gt.5) call Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate2,max_state2,&
+         max_state1, curr_overlaps, last_overlaps, 2)!2 is for second adiabat
+         last_overlaps(2) = curr_overlaps(2)
       enddo
       do iR = RSteps, 1, -1
          write(200,20) R(iR)+RDerivDelt, (RB%nrg_mat(iR,j), j=1, NumStates)
          write(200,20) R(iR), (CB%nrg_mat(iR,j), j=1, NumStates)
          write(200,20) R(iR)-RDerivDelt, (LB%nrg_mat(iR,j), j=1, NumStates)
       enddo
-
-      call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
    
    endif
 
@@ -519,7 +586,7 @@ endif
    close(200)
    close(300)
    close(301)
-   100 close(201)
+   !100 close(203)
 
   deallocate(S_lm, S_mr)
   deallocate(iwork)
@@ -531,6 +598,10 @@ endif
   deallocate(P,Q,dP)
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
+  deallocate(op_mat_1)
+  deallocate(op_mat_2)
+  deallocate(op_mat_old_1)
+  deallocate(op_mat_old_2)
 
   call deAllocateBasis(PB)
   call deAllocateBasis(CB)
@@ -545,6 +616,103 @@ endif
 
   stop
 end program HHL1DHyperspherical
+
+subroutine reorder_Q2(state_L, state_H, NumStates, RSteps) !state_L and state_H based on square of arrays being moved out
+implicit none
+integer NumStates, RSteps, i, j, swaps, state_H, state_L, iR, iter
+double precision tmp1, tmp2, P(NumStates, NumStates), tmp_P(State_H-State_L),R !tmp P will hold the array moved out
+
+open(unit = 102, file = "Q_Matrix.dat")
+open(unit = 501, file = "reordered_Q.dat")
+
+do iR = RSteps, 1, -1
+   print*, 'looping'
+    read(102,*,END=100) R
+    do i = 1, 80
+        read(102,*,END=100) (P(i, j), j=1,NumStates)
+    enddo
+
+    !store
+   do i = 1, NumStates
+      iter = state_H+1 ! iter = 79+1 = 80, want 8
+      tmp1 = P(i,state_H+1) ! 80
+      tmp2 = P(i,state_H)
+      do while(iter.ne.state_L+1) !3+1 = 4, no more!! when iter = 5, you do still want 4->5, and then 3->4; 
+         P(i,iter) = P(i,iter-2) !78 -> 80, 77 -> 79, ... , 3 -> 5,
+         iter = iter-1
+      enddo
+      P(i, state_L) = tmp1 !3 = 80
+      P(i, state_L+1) = tmp2 ! 4 = 70
+   enddo
+   do i = 1, NumStates
+      iter = state_H+1 ! iter = 79+1 = 80, want 8
+      tmp1 = P(state_H+1, i)
+      tmp2 = P(state_H, i)
+      do while(iter.ne.state_L+1) !3+1 = 4, no more!! when iter = 5, you do still want 4->5, and then 3->4; 
+         P(iter, i) = P(iter-2, i) !78 -> 80, 77 -> 79, ... , 3 -> 5,
+         iter = iter-1
+      enddo
+      P(state_L, i) = tmp1
+      P(state_L+1, i) = tmp2
+   enddo
+   write(501,*) R
+   do i = 1,NumStates
+      write(501,*) (P(i,j), j = 1,NumStates)
+   enddo
+enddo
+100 close(102)
+close(501)
+
+end subroutine reorder_Q2
+
+
+subroutine reorder_P2(state_L, state_H, NumStates, RSteps) !state_L and state_H based on square of arrays being moved out
+implicit none
+integer NumStates, RSteps, i, j, swaps, state_H, state_L, iR, iter
+double precision tmp1, tmp2, P(NumStates, NumStates), tmp_P(State_H-State_L),R !tmp P will hold the array moved out
+
+open(unit = 101, file = "P_Matrix.dat")
+open(unit = 500, file = "reordered_P.dat")
+
+do iR = RSteps, 1, -1
+   print*, 'looping'
+    read(101,*,END=100) R
+    do i = 1, 80
+        read(101,*,END=100) (P(i, j), j=1,NumStates)
+    enddo
+
+    !store
+   do i = 1, NumStates
+      iter = state_H+1 !
+      tmp1 = P(i,state_H+1) !
+      tmp2 = P(i,state_H)
+      do while(iter.ne.state_L+1) ! 
+         P(i,iter) = P(i,iter-2) !
+         iter = iter-1
+      enddo
+      P(i, state_L) = tmp1 !3 = 80
+      P(i, state_L+1) = tmp2 ! 4 = 70
+   enddo
+   do i = 1, NumStates
+      iter = state_H+1 ! 
+      tmp1 = P(state_H+1, i)
+      tmp2 = P(state_H, i)
+      do while(iter.ne.state_L+1) ! 
+         P(iter, i) = P(iter-2, i) 
+         iter = iter-1
+      enddo
+      P(state_L, i) = tmp1
+      P(state_L+1, i) = tmp2
+   enddo
+   write(500,*) R
+   do i = 1,NumStates
+      write(500,*) (P(i,j), j = 1,NumStates)
+   enddo
+enddo
+100 close(101)
+close(500)
+
+end subroutine reorder_P2
 
 subroutine populate_operator(op,i, NumStates)
 implicit none
@@ -561,29 +729,103 @@ op(i+1,i) = 1
 op(i+1, i+1) = 0
 end subroutine populate_operator
 
-subroutine Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
+subroutine Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state,&
+min_state, curr_overlaps, last_overlaps, ID)
 use BasisSets
 implicit none
 type(BASIS) CB, LB, RB
 double precision RDerivDelt, R(RSteps), slopes(2,2), num, den, tmp
 integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag
+integer ID, curr_overlaps(2), last_overlaps(2), min_state, slope_req
+if(iR.lt.RSteps) then
+   found_flag = 0
+   swapstate = 0
+   state = max_state
+   do while((found_flag.ne.1).and.(state.ne.min_state))
+      !This part creates a 2x2 matrix to represent the slopes of each point in the "box"
+      slopes(1,1) = dabs(RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
+      slopes(1,2) = dabs(RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
+      slopes(2,1) = dabs(RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
+      slopes(2,2) = dabs(RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
+      !This part compares the energy difference between two states at a given hyperradius.
+      !If the energy difference is zero, then the triad points are exactly at the avoided
+      !crossing.
+      if((dabs(CB%nrg_mat(iR, state)-CB%nrg_mat(iR, state+1)).lt.1E-2).or.&
+      (dabs(LB%nrg_mat(iR, state)-LB%nrg_mat(iR, state+1)).lt.1E-2).or.&
+      (dabs(RB%nrg_mat(iR, state)-RB%nrg_mat(iR, state+1)).lt.1E-2)) then
+         !if((ID.ne.1).and.(curr_overlaps(1).eq.0).or.(ID.eq.1)) then !this if statement is no longer necessary; added min_state
+            curr_overlaps(ID) = 1
+         !else
+         !   curr_overlaps(ID) = 0
+         !endif
+      else
+         curr_overlaps(ID) = 0
+      endif
+      !The above if statement prevents this type of crossing from being caught "twice" (by the
+      !iterator through the higher and lower diabat) by only allowing the higher diabat to catch
+      !a crossing at a given R if the lower diabat has not caught it already.
+      !Note: this is not an issue for the other method, because the other method uses two states
+      !and two hyperradii to find a crossing, and once one is found, the ordering of the states changes
+      !and the same crossing won't be found twice.
+      
+      !Now, the if-statement for finding a crossing; 100 is a number that seems to work for this system.
+      !If the energy difference method caugh a crossing that would have been caught at the next iteration
+      !by the slopes method, the last_overlaps stores that data and doesn't pass the if-statement for that
+      !next iteration
+      if((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100&
+      .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
+         slope_req = 1
+      else
+         slope_req = 0
+      endif
+      if(((slope_req.eq.1).and.(last_overlaps(ID).ne.1)).or.((curr_overlaps(ID).eq.1))) then
+         print*, 'max_state = ', max_state, 'ID = ', ID
+         print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
+         'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
+         print*, 'and curr_overlaps(ID) = ', curr_overlaps(ID)
+         swapstate = state
+         ! if(slope_req.eq.1) then
+         !    call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         !    call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         !    call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         ! endif
+         ! if((slope_req.eq.0).and.(curr_overlaps(ID).eq.1)) then
+         !    call swap_full_mod(CB%nrg_mat, swapstate, iR, RSteps, NumStates) !attempt to keep consistency of "where" swapping occurs
+         !    call swap_full_mod(LB%nrg_mat, swapstate, iR, RSteps, NumStates) !if it is found one hyperradial point sooner than
+         !    call swap_full_mod(RB%nrg_mat, swapstate, iR, RSteps, NumStates) !where it would/should have been found; the effect
+         ! endif                                                               !is mostly negligible, though.
+         call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         
+         found_flag = found_flag+1
+         max_state = state
+      endif
+      state = state - 1
+   enddo
+endif
+end subroutine Avoided_CrossingsV3
+
+subroutine Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
+use BasisSets
+implicit none
+type(BASIS) CB, LB, RB
+double precision RDerivDelt, R(RSteps), slopes(2,2), num, den, tmp
+integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag, overlapping
 
 if(iR.lt.RSteps) then
    found_flag = 0
    swapstate = 0
    state = max_state !=80 at the beginning of main loop
-   print*, 'max_state = ', max_state
-   do while((found_flag.ne.2).and.(state.ne.2))
-      slopes(1,1) = (RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
-      slopes(1,2) = (RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
-      slopes(2,1) = (RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
-      slopes(2,2) = (RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
-      !num = dabs(LB%nrg_mat(iR, state+1)-CB%nrg_mat(iR, state+1))/RDerivDelt -&
-      !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state+1))/RDerivDelt
-      !den = dabs(LB%nrg_mat(iR, state+1)-CB%nrg_mat(iR, state+1))/RDerivDelt -&
-      !   dabs(CB%nrg_mat(iR, state+1)-RB%nrg_mat(iR, state))/RDerivDelt
-      if(((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
-      .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
+   !print*, 'max_state = ', max_state
+   do while((found_flag.ne.1).and.(state.ne.0))
+      slopes(1,1) = dabs(RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
+      slopes(1,2) = dabs(RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
+      slopes(2,1) = dabs(RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
+      slopes(2,2) = dabs(RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
+
+      if((((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
+      .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100))) then
          print*, 'max_state = ', max_state
          print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
          'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
@@ -593,18 +835,6 @@ if(iR.lt.RSteps) then
          call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
          found_flag = found_flag+1
          max_state = state
-      !!section below can find *some* crossings that occur within triade!!
-      !else if(num/den.gt.100) then
-      !   print*, 'swap at subtriade'
-      !   swapstate = state
-      !    call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      !    call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      !    call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
-      !    tmp = RB%nrg_mat(iR, state)
-      !    RB%nrg_mat(iR, state) = RB%nrg_mat(iR, state+1)
-      !    RB%nrg_mat(iR, state+1) = tmp
-      !    found_flag = found_flag+1
-      !    max_state = state
       endif
       state = state - 1
    enddo
@@ -622,21 +852,32 @@ do i = iR+1, RSteps
 enddo
 end subroutine swap_full
 
-subroutine swap_psi(swapstate, psi, xDim, ncv)
+subroutine swap_full_mod(curr_nrg, swapstate, iR, RSteps, NumStates)
+implicit none
+double precision curr_nrg(RSteps, NumStates), tmp_nrg
+integer swapstate, iR, RSteps, NumStates, i
+do i = iR, RSteps
+  tmp_nrg = curr_nrg(i,swapstate)
+  curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+  curr_nrg(i,swapstate+1) = tmp_nrg
+enddo
+end subroutine swap_full_mod
+
+subroutine swap_psi_sign(swapstate, psi, xDim, ncv)
 implicit none
 double precision psi(xDim,ncv), tmp!(xDim)
 integer swapstate, i, xDim, ncv
 
 do i = 1, xDim
    tmp = psi(i, swapstate)
-   psi(i, swapstate) = sign(psi(i, swapstate+1), psi(i, swapstate)) !return value of psi+1 but with original sign of psi
-   psi(i, swapstate+1) = sign(tmp, psi(i, swapstate+1)) !return value of psi, but with original sign of psi+1
+   psi(i, swapstate) = sign(psi(i, swapstate), psi(i, swapstate+1)) !return value of psi+1 but with original sign of psi
+   psi(i, swapstate+1) = sign(psi(i, swapstate+1), tmp) !return value of psi, but with original sign of psi+1
 enddo
 
 ! tmp = psi(:,swapstate)
 ! psi(:,swapstate) = psi(:,swapstate+1)
 ! psi(:,swapstate+1) = tmp
-end subroutine swap_psi
+end subroutine swap_psi_sign
 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
@@ -808,13 +1049,7 @@ contains
       do i = 1, CB%xDim
          do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
             call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
-            !if (nu .eq. 9) print*, 'S_ij = ', S_ij
-            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu)) !!!check for identity matrix t(R1,R1) mu,nu
-            !if (nu .eq. 9) print*, 'term_1_mu_nu = ', term_1_mu_nu
-            !if (nu .eq. 9) print*, 'CB%Psi(i,mu) = ', CB%Psi(i,mu)
-            !if (nu .eq. 9) print*, 'CB%Psi(j,nu) = ', CB%Psi(j,nu)
-            !if (nu .eq. 9) print*, 'CB%Psi(i,mu)*CB%Psi(j,nu) = ', CB%Psi(i,mu)*CB%Psi(j,nu)
-            !if (S_ij.lt.0) print*, 'S_ij=', S_ij
+            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
          enddo
       enddo
       !print*, '1/RDerivDelt*term_1_mu_nu=', term_1_mu_nu*(1/.0001)
