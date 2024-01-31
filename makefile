@@ -2,9 +2,9 @@ CMP     = gfortran
 CMPFLAGS = -ffixed-line-length-132 -O3
 DEBUG   = -fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-8
-INCLUDE =  -I/usr/local/
+ARPACK =  -L/opt/homebrew/lib/ -larpack
+INCLUDE =  -I/opt/homebrew/include
 LAPACK =  -framework Accelerate
-ARPACK =  -I/usr/local/include -L /usr/local/lib/ -larpack
 OBJS  = besselnew.o Bsplines.o Quadrature.o AtomIon1D.o
 #matrix_stuff.o
 
