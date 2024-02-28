@@ -300,11 +300,13 @@ program AtomIon1D
       call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,QTil,ncv)      
       write(200,20) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
       write(101,*) R(iR)
+      write(102,*) R(iR)
       do i=1,NumStates
          write(101,*) (P(i,j), j=1,NumStates)
+         write(102,*) (QTil(i,j), j=1,NumStates)
       enddo
       write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4),P(1,5)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
-      write(104,*) R(iR), QTil(1,1),QTil(2,2),QTil(3,3)
+      write(104,*) R(iR), -QTil(1,1), -QTil(2,2), -QTil(3,3), -QTil(4,4)!- 0.25d0/2d0/mu/R(iR)**2,QTil(1,1),QTil(2,2),QTil(3,3)
       !--------------------------------------------------------------------------!
       OldPsi = CB%Psi
 !    Adjusting Shift
@@ -321,7 +323,9 @@ program AtomIon1D
 
    close(11)
    close(101)
+   close(102)
    close(103)
+   close(104)
    close(200)
    close(300)
    close(301)
@@ -409,6 +413,7 @@ end subroutine CalcPermutation
       allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim),DPsi(MatrixDim))
     
       TempPsi = Psi
+      P=0d0
       do m = 1,NumStates
          call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,D,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,DPsi,1)   ! Calculate the vector D*Psi(m) and store in DPsi
          call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*Psi(m) and store in SPsi 
@@ -421,7 +426,11 @@ end subroutine CalcPermutation
          enddo
       enddo
       QTil = matmul(P,P) 
-
+!!$      do i = 1, NumStates
+!!$         do j = 1, NumStates
+!!$            write(6,*) i,j,QTil(i,j)
+!!$         enddo
+!!$      enddo
       deallocate(TempPsi,SPsi,DPsi)
 
       return
@@ -950,7 +959,8 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
            NewRow = HalfBandWidth+1+Row-Col
            S(NewRow,Col) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-           D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           !           D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           D(NewRow,Col) = xT(ix,ixp)/(2d0*mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
 !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
