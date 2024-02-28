@@ -1,7 +1,5 @@
 module BasisSets
    implicit none
-   double precision, allocatable :: S_lm(:,:)
-   double precision, allocatable :: S_mr(:,:)
 TYPE basis
    integer Left, Right, xDim
    double precision, allocatable :: u(:,:,:), uxx(:,:,:)
@@ -60,8 +58,6 @@ program AtomIon1D
    integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
    integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
-   !integer, allocatable :: op_mat_1(:,:), op_mat_old_1(:,:)
-   !integer, allocatable :: op_mat_2(:,:), op_mat_old_2(:,:)
    double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
    double precision, allocatable :: R(:),Perm(:,:),ComposedPerm(:,:),AbsPerm(:,:)
@@ -112,14 +108,14 @@ program AtomIon1D
    read(5,*) LegPoints
    write(6,*) LegPoints,' LegPoints'
 
-   !     read in boundary conditions
+   ! read in boundary conditions
    read(5,*)
    read(5,*)
    read(5,*) Shift,Shift2,Order,Left,Right
    print*, 'Shift,Shift2, Order, Left, Right'
    print*, Shift,Shift2,Order,Left,Right
 
-   !     read in potential parameters
+   ! read in potential parameters
    read(5,*)
    read(5,*)
    read(5,*) alpha,mi,ma,DD,L
@@ -132,10 +128,10 @@ program AtomIon1D
    Pi=dacos(-1.d0)
    write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
    mgamma = mu
-   theta_c = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
+   theta_c = datan(mgamma)     ! same as Seth's beta !!! arctan mu, d?atan
    write(6,*) "theta_c = ", theta_c
 
-   !     read in grid information
+   ! read in grid information
    read(5,*)
    read(5,*)
    read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol
@@ -152,21 +148,14 @@ program AtomIon1D
    write(6,*) "sNb = ", sNb
 
    ! Re-define in oscillator units
-
    ma = ma/mi
    mi = 1d0
-   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
-   !      mu=dsqrt(mi*ma)
-
+   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass (mu remains unchanged)
+   
    read(5,*)
    read(5,*)
    read(5,*) RSteps,RDerivDelt,RFirst,RLast
    write(6,*) RSteps,RDerivDelt,RFirst,RLast
-
-
-   !write(6,*) "Resetting RFirst from: ", RFirst
-   !RFirst = dsqrt(mu/(1+mu**2))*(RStar/(lho*(Nbs*Pi+phi)))+2*RDerivDelt
-   !write(6,*) "to: ", RFirst
 
   
   allocate(R(RSteps))
@@ -187,8 +176,6 @@ program AtomIon1D
   HalfBandWidth = Order
   LeadDim = 3*HalfBandWidth+1
 
-  allocate(S_lm(2*HalfBandWidth+1,xDim))
-  allocate(S_mr(2*HalfBandWidth,xDim))
   TotalMemory = 2.0d0*(HalfBandWidth+1)*MatrixDim ! S, H
   TotalMemory = TotalMemory + 2.0d0*LegPoints*(Order+2)*xDim ! x splines
   TotalMemory = TotalMemory + 2.0d0*NumStates*NumStates ! P and Q matrices
@@ -319,23 +306,13 @@ program AtomIon1D
       write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4),P(1,5)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
       write(104,*) R(iR), QTil(1,1),QTil(2,2),QTil(3,3)
       !--------------------------------------------------------------------------!
-      OldPsi = CB%Psi!NewPsi ! moved this to before FixPhase just to see if FixPhase was a problem            
+      OldPsi = CB%Psi
 !    Adjusting Shift
      ur(iR) = CB%Energies(1,1)
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
      endif
-     
-   !   if (PsiFlag .ne. 0) then
-   !      do i = 1,xNumPoints
-   !         write(97,*) xPoints(i)
-   !      enddo
-   !      do i = 1,MatrixDim
-   !         write(999+iR,20) (CB%Psi(i,j), j = 1,NumStates)
-   !      enddo
-   !      close(unit=999+iR)
-   !   endif
 
    call CPU_TIME(t2)
    write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
@@ -350,7 +327,6 @@ program AtomIon1D
    close(301)
    !100 close(203)
 
-  deallocate(S_lm, S_mr)
   deallocate(iwork)
   deallocate(LSelect)
   deallocate(LUFac)
