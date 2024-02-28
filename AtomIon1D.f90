@@ -495,8 +495,8 @@ if(troubleshooting.eq.0) then
            write(102,20) (Q(i,j), j = 1,min(NumStates,iparam(5)))
            write(103,20) (dP(i,j), j = 1,min(NumStates,iparam(5)))
         enddo
-
-      if(swapstate1.ne.0) then
+        write(400,*) R(iR), (-Q(i,i), i = 1, NumStates)
+        if(swapstate1.ne.0) then
          write(610,*) 'Swap1: R(iR) =', R(iR)
         !do i = swapstate1
            !write(610,*) (P(i,j), j = swapstate1,swapstate1+1)
