@@ -70,7 +70,7 @@ program AtomIon1D
    
    REAL t1, t2
 
-   logical, allocatable :: Select(:)
+   logical, allocatable :: LSelect(:)
 
    integer swapstate,iparam(11),ncv,info,troubleshooting
    integer i,j,k,iR,NumFirst,NumBound
@@ -87,10 +87,11 @@ program AtomIon1D
    double precision, allocatable :: workd(:),Residuals(:)
    double precision, allocatable :: xLeg(:),wLeg(:)
    double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
-   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:), testmat(:,:)
+   double precision, allocatable :: P(:,:),QTil(:,:),dP(:,:), testmat(:,:),SPsi(:)
    double precision ur(1:50000),acoef,bcoef,diff
    double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
-   double precision hbar, phi, amu,omega,Rstar, dum,Dtol
+   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
+   double precision, external :: ddot
    character*64 LegendreFile
    character*64 leftnrg
    common /Rvalue/ Rvalue      
@@ -205,18 +206,18 @@ program AtomIon1D
 
   allocate(xPoints(xNumPoints))
 !  allocate(xBounds(xNumPoints+2*Order))
-  allocate(P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates))
+  allocate(P(NumStates,NumStates),QTil(NumStates,NumStates),dP(NumStates,NumStates))
 
   ncv = 2*NumStates
   LeadDim = 3*HalfBandWidth+1
-  allocate(OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv))
+  allocate(OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv),SPsi(MatrixDim))
 !  allocate(TransEnergies(2,ncv),TransPsi(ncv,MatrixDim))
   allocate(OldEnergies(ncv,2),TempEnergies(ncv,2))
   allocate(AllEnergies(NumStates,RSteps))
   allocate(AllPsis(NumStates,MatrixDim,RSteps))  ! Note that this is storing eigenvectors in the ROWS instead of collumns.
-  allocate(testmat(MatrixDim,NumStates))
+  allocate(testmat(NumStates,NumStates))
   allocate(iwork(MatrixDim))
-  allocate(Select(ncv))
+  allocate(LSelect(ncv))
   allocate(LUFac(LeadDim,MatrixDim))
   allocate(workl(ncv*ncv+8*ncv))
   allocate(workd(3*MatrixDim))
@@ -231,32 +232,25 @@ program AtomIon1D
   call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates)
   call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates)
  
-   open(unit = 203, file = "AdiabaticEnergies.dat") !printout of raw energies without diabatization method
-   open(unit = 200, file = "DiabaticEnergies.dat") !version 1 uses "tail swapping" method (diabats correspond to states 1 and 2)
-   !open(unit = 201, file = "energiesv2.dat") !version 2 uses "operator-on-the-fly" method (diabats correspond to states 79 and 80)
+   open(unit = 203, file = "AdiabaticEnergies.dat") 
+   open(unit = 200, file = "DiabaticEnergies.dat") 
    open(unit = 101, file = "P_Matrix.dat")
-   !open(unit = 102, file = "Q_Matrix.dat")
+   open(unit = 102, file = "QTil_Matrix.dat")
    open(unit = 103, file = "QuickPMat.dat")
+   open(unit = 104, file = "QuickQTilMat.dat")
 
    allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
-!   allocate(op_mat_1(NumStates, NumStates))
-!   allocate(op_mat_old_1(NumStates, NumStates))
-!   allocate(op_mat_2(NumStates, NumStates))
-!   allocate(op_mat_old_2(NumStates, NumStates))
    
-
    CB%Left = Left
    CB%Right = Right
    RChange=100.d0
-   do iR = RSteps,1,-1 !RSteps
+   do iR = RSteps,1,-1 
       call CPU_TIME(t1)
       NumFirst=NumStates
       if (R(iR).gt.RChange) then
          NumFirst=NumBound
       endif
       NumStateInc=NumStates-NumFirst
-      !c----------------------------------------------------------------------------------------
-      !     must move this block inside the loop over iR if the grid is adaptive
       
       xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
       xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
@@ -271,10 +265,9 @@ program AtomIon1D
       !******** CONSTRUCTION OF BASIS SETS ********
       call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
       call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
-      !call calc_Physical_Set(CB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
       call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
          LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D)
-      call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+      call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
            NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
       NewPsi = CB%Psi
@@ -290,6 +283,7 @@ program AtomIon1D
          enddo
          ComposedPerm = Perm
       endif
+      
       ! Construct the composed permutation operator and permute the eigenvectors and eigenvalues
       ComposedPerm = matmul(ComposedPerm,Perm)
       AllPsis(:,:,iR) = matmul(ComposedPerm,AllPsis(:,:,iR))
@@ -298,32 +292,34 @@ program AtomIon1D
       NewPsi = 0d0
       NewPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR))
 
-      if(iR .ne. RSteps) then         
-         call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,OldPsi,NewPsi)
+      !--- Check the phase consistency of NewPsi, and fix phases ------
+      if(iR.lt.RSteps) then
+         OldPsi = 0d0
+         OldPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR+1))
+         do j = 1,NumStates
+            call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,CB%S,HalfBandWidth+1,OldPsi(:,j),1,0.0d0,SPsi,1)  ! Calculate the vector S*OldPsi and store in SPsi            
+            testorth=ddot(MatrixDim,NewPsi(:,j),1,SPsi,1)            
+            if(testorth.lt.0d0) then
+               NewPsi(:,j) = -NewPsi(:,j)
+               AllPsis(j,:,iR) = -AllPsis(j,:,iR)
+            endif
+         enddo
       endif
-      OldPsi = CB%Psi!NewPsi ! moved this to before FixPhase just to see if FixPhase was a problem      
+      !--------------------------------------------
       
       write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) ! writing undiabatized energies
-      !-------- Use this for couplings from the adiabatic eigenstates -------------!
-      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,CB%Energies,CB%Psi,CB%S,CB%D,P,Q,ncv)
-      write(101,*) R(iR)
-      do i=1,NumStates
-         write(101,*) (P(i,j), j=1,NumStates)
-      enddo
-      write(103,*) R(iR), P(1,2),P(1,3),P(1,4),P(2,3),P(3,4)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
-      !--------------------------------------------------------------------------!
 
-      
-      !-------- Use this for couplings from the diabatized eigenstates -------------!
-      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,Q,ncv)      
+      !-------- Couplings from the diabatized eigenstates -------------!
+      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,QTil,ncv)      
       write(200,20) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
       write(101,*) R(iR)
       do i=1,NumStates
          write(101,*) (P(i,j), j=1,NumStates)
       enddo
-      write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
+      write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4),P(1,5)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
+      write(104,*) R(iR), QTil(1,1),QTil(2,2),QTil(3,3)
       !--------------------------------------------------------------------------!
-      
+      OldPsi = CB%Psi!NewPsi ! moved this to before FixPhase just to see if FixPhase was a problem            
 !    Adjusting Shift
      ur(iR) = CB%Energies(1,1)
      Shift = -200d0
@@ -356,18 +352,17 @@ program AtomIon1D
 
   deallocate(S_lm, S_mr)
   deallocate(iwork)
-  deallocate(Select)
+  deallocate(LSelect)
   deallocate(LUFac)
   deallocate(workl)
   deallocate(workd)
   deallocate(Residuals)
-  deallocate(P,Q,dP)
+  deallocate(P,QTil,dP)
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
-  !call deAllocateBasis(PB)
+
   call deAllocateBasis(CB)
-  !if (CouplingFlag .ne. 0) call deAllocateBasis(LB)
-  !if (CouplingFlag .ne. 0) call deAllocateBasis(RB)
+
   
   deallocate(R)
 
@@ -408,10 +403,7 @@ subroutine CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,S,Per
         else if(abs(testorth).lt.tol) then           
            Perm(m,n) = 0d0
         else
-           write(6,*) "testorth outside of tolerance, but Perm(", m,n,") set to ",Perm(m,n)
-        endif
-        if((m.ne.n).and.Perm(m,n).eq.1d0) then
-           write(6,*) m,n,Perm(m,n)
+           write(6,*) "testorth outside of tolerance",testorth, "but Perm(", m,n,") set to ",Perm(m,n)
         endif
         Perm(n,m) = Perm(m,n)
      enddo
@@ -427,12 +419,12 @@ end subroutine CalcPermutation
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !Computes the couplings using the Feynman-Hellmann theorem
     ! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix Psi.  
-    subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,Q,ncv)
+    subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,ncv)
       implicit none
       integer NumStates,HalfBandWidth,MatrixDim,ncv
       double precision Psi(MatrixDim,ncv),U(NumStates,2)
       double precision S(HalfBandWidth+1,MatrixDim),D(HalfBandWidth+1,MatrixDim),testorth
-      double precision P(NumStates,NumStates),Q(NumStates,NumStates)
+      double precision P(NumStates,NumStates),QTil(NumStates,NumStates)
       double precision aP
       integer i,j,k,n,m
       double precision, external :: ddot 
@@ -452,7 +444,7 @@ end subroutine CalcPermutation
             P(m,n) = -P(n,m)
          enddo
       enddo
-      Q = matmul(P,P) 
+      QTil = matmul(P,P) 
 
       deallocate(TempPsi,SPsi,DPsi)
 
