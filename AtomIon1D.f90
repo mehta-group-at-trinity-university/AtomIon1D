@@ -306,7 +306,7 @@ program AtomIon1D
          write(102,*) (QTil(i,j), j=1,NumStates)
       enddo
       write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4),P(1,5)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
-      write(104,*) R(iR), -QTil(1,1), -QTil(2,2), -QTil(3,3), -QTil(4,4)!- 0.25d0/2d0/mu/R(iR)**2,QTil(1,1),QTil(2,2),QTil(3,3)
+      write(104,*) R(iR), (-QTil(i,i)*R(iR)**2, i=1,1)
       !--------------------------------------------------------------------------!
       OldPsi = CB%Psi
 !    Adjusting Shift
@@ -922,8 +922,6 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
   xVC4 = 0d0
   do ix = 1,xDim
      do ixp = max(1,ix-Order),min(xDim,ix+Order)
-        xT(ix,ixp) = 0.0d0
-        xV(ix,ixp) = 0.0d0
         do kx = kxMin(ixp,ix),kxMax(ixp,ix)
            xTempT = 0.0d0
            xTempV = 0.0d0
@@ -959,8 +957,8 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
            NewRow = HalfBandWidth+1+Row-Col
            S(NewRow,Col) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-           !           D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
-           D(NewRow,Col) = xT(ix,ixp)/(2d0*mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           !D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
 !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
