@@ -1,19 +1,23 @@
 module BasisSets
    implicit none
+   double precision, allocatable :: S_lm(:,:)
+   double precision, allocatable :: S_mr(:,:)
 TYPE basis
    integer Left, Right, xDim
-   double precision, allocatable :: x(:,:),V(:,:),u(:,:,:), uxx(:,:,:)
+   double precision, allocatable :: u(:,:,:), uxx(:,:,:)
    double precision, allocatable :: S(:,:)
    double precision, allocatable :: H(:,:)
    double precision, allocatable :: D(:,:)
    double precision, allocatable :: Psi(:,:),Energies(:,:)
+   double precision, allocatable :: nrg_mat(:,:)
+   double precision, allocatable :: psi_mat(:,:)
    double precision alpha, beta
    integer, allocatable :: xBounds(:)
 END TYPE basis
 contains
-   subroutine AllocateBasis(T,Left, Right,Order, LegPoints, xNumPoints,NumStates)
+   subroutine AllocateBasis(T,Left, Right,Order, LegPoints, xNumPoints,NumStates,RSteps)
       implicit none
-      integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv
+      integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv, RSteps
       TYPE(basis) T
       T%Left = Left
       T%Right = Right
@@ -22,21 +26,17 @@ contains
       if (Right .eq. 2) T%xDim = T%xDim + 1
       MatrixDim = T%xDim
       ncv = 2*NumStates
-      allocate(T%x(LegPoints, xNumPoints))
-      allocate(T%V(LegPoints, xNumPoints))
       allocate(T%u(LegPoints, xNumPoints, T%xDim))
       allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
       allocate(T%xBounds(xNumPoints+2*Order))
       allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim),T%D(Order+1,T%xDim))
       allocate(T%Psi(MatrixDim,ncv))
       allocate(T%Energies(ncv,2))
-   
+      allocate(T%nrg_mat(RSteps,NumStates))
    end subroutine AllocateBasis
    subroutine deAllocateBasis(T)
       implicit none
       TYPE(basis) T
-      deallocate(T%x)
-      deallocate(T%V)
       deallocate(T%u)
       deallocate(T%uxx)
       deallocate(T%xBounds)
@@ -45,12 +45,11 @@ contains
       deallocate(T%D)
       deallocate(T%Psi)
       deallocate(T%Energies)
-  
+      deallocate(T%nrg_mat)
    end subroutine deAllocateBasis
- end module BasisSets
- 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-program AtomIon1D
+end module BasisSets
+
+program HHL1DHyperspherical
    use BasisSets
    implicit none
    TYPE(basis) PB
@@ -62,18 +61,21 @@ program AtomIon1D
    integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
    integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
+   integer, allocatable :: op_mat_1(:,:), op_mat_old_1(:,:)
+   integer, allocatable :: op_mat_2(:,:), op_mat_old_2(:,:)
    double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
-   double precision, allocatable :: R(:),Perm(:,:),ComposedPerm(:,:),AbsPerm(:,:)
+   double precision, allocatable :: R(:)
    double precision, allocatable :: xPoints(:)
-   double precision, allocatable :: AllEnergies(:,:), AllPsis(:,:,:)
-   
+   double precision, allocatable :: slopes(:,:)
+   double precision, allocatable :: tmp_energies(:), tmp_psi(:)
+   integer, allocatable :: OneToEighty(:)
    REAL t1, t2
 
-   logical, allocatable :: LSelect(:)
+   logical, allocatable :: Select(:)
 
-   integer swapstate,iparam(11),ncv,info,troubleshooting
-   integer i,j,k,iR,NumFirst,NumBound
+   integer swapstate,iparam(11),ncv,info,troubleshooting, swapstate1, swapstate2
+   integer i,j,k,iR,NumFirst,NumBound, swapped_flag_1, swapped_flag_2
    integer LeadDim,MatrixDim,HalfBandWidth
    integer xDim, Nbs
    integer, allocatable :: iwork(:)
@@ -86,12 +88,11 @@ program AtomIon1D
    double precision, allocatable :: LUFac(:,:),workl(:)
    double precision, allocatable :: workd(:),Residuals(:)
    double precision, allocatable :: xLeg(:),wLeg(:)
-   double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
-   double precision, allocatable :: P(:,:),QTil(:,:),dP(:,:), testmat(:,:),SPsi(:)
+   !  double precision, allocatable :: lPsi(:,:),mPsi(:,:),rPsi(:,:),Energies(:,:)
+   double precision, allocatable :: P(:,:),Q(:,:),dP(:,:)
    double precision ur(1:50000),acoef,bcoef,diff
    double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
-   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
-   double precision, external :: ddot
+   double precision hbar, phi, amu,omega,Rstar, dum
    character*64 LegendreFile
    character*64 leftnrg
    common /Rvalue/ Rvalue      
@@ -112,14 +113,14 @@ program AtomIon1D
    read(5,*) LegPoints
    write(6,*) LegPoints,' LegPoints'
 
-   ! read in boundary conditions
+   !     read in boundary conditions
    read(5,*)
    read(5,*)
    read(5,*) Shift,Shift2,Order,Left,Right
    print*, 'Shift,Shift2, Order, Left, Right'
    print*, Shift,Shift2,Order,Left,Right
 
-   ! read in potential parameters
+   !     read in potential parameters
    read(5,*)
    read(5,*)
    read(5,*) alpha,mi,ma,DD,L
@@ -132,14 +133,14 @@ program AtomIon1D
    Pi=dacos(-1.d0)
    write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
    mgamma = mu
-   theta_c = datan(mgamma)     ! same as Seth's beta !!! arctan mu, d?atan
+   theta_c = datan(mgamma)     ! same as Seths beta !!! arctan mu, d?atan
    write(6,*) "theta_c = ", theta_c
 
-   ! read in grid information
+   !     read in grid information
    read(5,*)
    read(5,*)
-   read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol
-   write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol
+   read(5,*) xNumPoints, omega, Nbs, C4, phi
+   write(6,*) xNumPoints, omega, Nbs, C4, phi
    omega = 2d0*Pi*omega
    lho = dsqrt(hbar/mi/omega)
    Rstar = dsqrt(2*mu12*C4/hbar**2)
@@ -152,16 +153,23 @@ program AtomIon1D
    write(6,*) "sNb = ", sNb
 
    ! Re-define in oscillator units
+
    ma = ma/mi
    mi = 1d0
-   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass (mu remains unchanged)
-   
+   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
+   !      mu=dsqrt(mi*ma)
+
    read(5,*)
    read(5,*)
    read(5,*) RSteps,RDerivDelt,RFirst,RLast
    write(6,*) RSteps,RDerivDelt,RFirst,RLast
 
-  
+
+   !write(6,*) "Resetting RFirst from: ", RFirst
+   !RFirst = dsqrt(mu/(1+mu**2))*(RStar/(lho*(Nbs*Pi+phi)))+2*RDerivDelt
+   !write(6,*) "to: ", RFirst
+
+  allocate(slopes(RSteps,NumStates))
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
   do i = 1,RSteps
@@ -180,6 +188,8 @@ program AtomIon1D
   HalfBandWidth = Order
   LeadDim = 3*HalfBandWidth+1
 
+  allocate(S_lm(2*HalfBandWidth+1,xDim))
+  allocate(S_mr(2*HalfBandWidth,xDim))
   TotalMemory = 2.0d0*(HalfBandWidth+1)*MatrixDim ! S, H
   TotalMemory = TotalMemory + 2.0d0*LegPoints*(Order+2)*xDim ! x splines
   TotalMemory = TotalMemory + 2.0d0*NumStates*NumStates ! P and Q matrices
@@ -197,55 +207,61 @@ program AtomIon1D
 
   allocate(xPoints(xNumPoints))
 !  allocate(xBounds(xNumPoints+2*Order))
-  allocate(P(NumStates,NumStates),QTil(NumStates,NumStates),dP(NumStates,NumStates))
+  allocate(P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates))
 
   ncv = 2*NumStates
   LeadDim = 3*HalfBandWidth+1
-  allocate(OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv),SPsi(MatrixDim))
-!  allocate(TransEnergies(2,ncv),TransPsi(ncv,MatrixDim))
-  allocate(OldEnergies(ncv,2),TempEnergies(ncv,2))
-  allocate(AllEnergies(NumStates,RSteps))
-  allocate(AllPsis(NumStates,MatrixDim,RSteps))  ! Note that this is storing eigenvectors in the ROWS instead of collumns.
-  allocate(testmat(NumStates,NumStates))
+  allocate(oldPsi(MatrixDim,ncv))
+  allocate(oldEnergies(ncv,2))
   allocate(iwork(MatrixDim))
-  allocate(LSelect(ncv))
+  allocate(Select(ncv))
   allocate(LUFac(LeadDim,MatrixDim))
   allocate(workl(ncv*ncv+8*ncv))
   allocate(workd(3*MatrixDim))
   allocate(Residuals(MatrixDim))
-  
+  allocate(OneToEighty(NumStates))
   info = 0
   iR=1
   Tol=1e-20
 
   NumBound=0
   
-  call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates)
-  call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates)
+  call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates, RSteps)
+  call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates, RSteps)
  
-   open(unit = 203, file = "AdiabaticEnergies.dat") 
-   open(unit = 200, file = "DiabaticEnergies.dat") 
-   open(unit = 101, file = "P_Matrix.dat")
-   open(unit = 102, file = "QTil_Matrix.dat")
-   open(unit = 103, file = "QuickPMat.dat")
-   open(unit = 104, file = "QuickQTilMat.dat")
+   open(unit = 203, file = "ad_energies.dat") !printout of raw energies without diabatization method
+   !open(unit = 200, file = "energiesv1.dat") !version 1 uses "tail swapping" method (diabats correspond to states 1 and 2)
+   !open(unit = 201, file = "energiesv2.dat") !version 2 uses "operator-on-the-fly" method (diabats correspond to states 79 and 80)
+   !open(unit = 101, file = "P_Matrix.dat")
+   !open(unit = 102, file = "Q_Matrix.dat")
 
-   allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
-   
-   CB%Left = Left
-   CB%Right = Right
+   allocate(op_mat_1(NumStates, NumStates))
+   allocate(op_mat_old_1(NumStates, NumStates))
+   allocate(op_mat_2(NumStates, NumStates))
+   allocate(op_mat_old_2(NumStates, NumStates))
+   allocate(tmp_energies(NumStates))
+   allocate(tmp_psi(NumStates))
+   swapstate = 0
+   swapstate1 = 0
+   swapstate2 = 0
+   max_state = NumStates-1
+   max_state1 = NumStates-1
+   max_state2 = NumStates-1
+ 
    RChange=100.d0
-   do iR = RSteps,1,-1 
+   do iR = RSteps,1,-1 !RSteps
       call CPU_TIME(t1)
       NumFirst=NumStates
       if (R(iR).gt.RChange) then
          NumFirst=NumBound
       endif
       NumStateInc=NumStates-NumFirst
-      
-      xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
-      xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
-      
+     !c----------------------------------------------------------------------------------------
+     !     must move this block inside the loop over iR if the grid is adaptive
+  
+         xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
+         xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
+ 
       sbc = (lho/Rstar)*R(iR)*dsqrt((1d0 + mu**2)/mu)*SIN(xMin - theta_c)
       !print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
       if(xMax.le.xMin) then
@@ -253,74 +269,65 @@ program AtomIon1D
          stop
       endif
       call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
-      !******** CONSTRUCTION OF BASIS SETS ********
-      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
-      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
+         !print*, 'done... Calculating Primitive Basis Functions'
+         tmp_alpha = 1
+         tmp_beta = 1
+         call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,0,PB%u, tmp_alpha, tmp_beta,.false.)
+         call CalcBasisFuncsBP(PB%Left,PB%Right, RVal_L, RVal_R, Order,xPoints,&
+         LegPoints,xLeg,PB%xDim,PB%xBounds,xNumPoints,2,PB%uxx, tmp_alpha, tmp_beta,.false.)
+      !print*, 'done... Calculating overlap matrix'
+      !     must move this block inside the loop if the grid is adaptive
+      !----------------------------------------------------------------------------------------
+      call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,PB%xDim,xNumPoints,PB%u,PB%xBounds,HalfBandWidth,PB%S)
+!******** CONSTRUCTION OF BASIS SETS ********
+      !write(6,*) 'Constructing center basis set.'
+      YVal_L = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu - ((sbc*Rstar)/(lho*R(iR)))**2) * ((1/sbc)+(1/sbc**2)*COTAN(-(1/sbc)+phi))
+      RVal_L = 1.d0/YVal_L
+      RVal_R = -RVal_L
+      !write(6,*) 'Center Basis YVal_L = ', YVal_L
+      !write(6,*) 'Center Basis RVal_L = ', RVal_L
+      call CalcBasisFuncsBP(CB%Left,CB%Right, RVal_L, RVal_R, Order,&
+      xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u, CB%alpha, CB%beta, .true.)
+      call calc_Physical_Set(CB,PB,RVal_L,RVal_R,Order, xNumPoints, xPoints)
+      !write(6,*) 'CB%alpha (u) = ', CB%alpha
+      !write(6,*) 'CB%beta (u) = ', CB%beta
+      !call CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%xBounds,HalfBandWidth,CB%S) ! added
+      !write(6,*) 'Center Basis Set Constructed.'
+      !call CalcHamiltonian(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
+      !   LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H)
       call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
-         LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB)
-      call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-           NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+         LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D)
+      call MyDsband(Select,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+         NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+
+         write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) !!New: writing un-diabatized energies for comparison in poster plot
+         
+
+      if(iR .ne. RSteps) then
+         call FixPhase(NumStates,HalfBandWidth,MatrixDim,CB%S,ncv,oldPsi,CB%Psi)
+      endif
+      oldPsi = CB%Psi
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
-      NewPsi = CB%Psi
-      
-      AllPsis(:,:,iR) = Transpose(CB%Psi(:,1:NumStates))
-      AllEnergies(:,iR) = CB%Energies(1:NumStates,1)
-      
-      call CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,CB%S,Perm,ncv,Dtol)
-      if(iR.eq.RSteps) then
-         Perm = 0d0
-         do i = 1,NumStates
-            Perm(i,i) = 1d0
-         enddo
-         ComposedPerm = Perm
-      endif
-      
-      ! Construct the composed permutation operator and permute the eigenvectors and eigenvalues
-      ComposedPerm = matmul(ComposedPerm,Perm)
-      AllPsis(:,:,iR) = matmul(ComposedPerm,AllPsis(:,:,iR))
-      AllEnergies(:,iR) = matmul(ComposedPerm,AllEnergies(:,iR))
 
-      NewPsi = 0d0
-      NewPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR))
-
-
-      !--- Check the phase consistency of NewPsi, and fix phases ------
-      if(iR.lt.RSteps) then
-         OldPsi = 0d0
-         OldPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR+1))
-         do j = 1,NumStates
-            call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,CB%S,HalfBandWidth+1,OldPsi(:,j),1,0.0d0,SPsi,1)  ! Calculate the vector S*OldPsi and store in SPsi            
-            testorth=ddot(MatrixDim,NewPsi(:,j),1,SPsi,1)            
-            if(testorth.lt.0d0) then
-               NewPsi(:,j) = -NewPsi(:,j)
-               AllPsis(j,:,iR) = -AllPsis(j,:,iR)
-            endif
-         enddo
-
-      endif
-      !--------------------------------------------
-      
-      write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) ! writing undiabatized energies
-
-      !-------- Couplings from the diabatized eigenstates -------------!
-      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,QTil,ncv)      
-      write(200,20) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
-      write(101,*) R(iR)
-      write(102,*) R(iR)
-      do i=1,NumStates
-         write(101,*) (P(i,j), j=1,NumStates)
-         write(102,*) (QTil(i,j), j=1,NumStates)
-      enddo
-      write(103,*) R(iR),(P(1,i)*R(iR),i=1,NumStates)
-      write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
-      !--------------------------------------------------------------------------!
-      OldPsi = CB%Psi
 !    Adjusting Shift
      ur(iR) = CB%Energies(1,1)
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
      endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     
+   !   if (PsiFlag .ne. 0) then
+   !      do i = 1,xNumPoints
+   !         write(97,*) xPoints(i)
+   !      enddo
+   !      do i = 1,MatrixDim
+   !         write(999+iR,20) (CB%Psi(i,j), j = 1,NumStates)
+   !      enddo
+   !      close(unit=999+iR)
+   !   endif
 
    call CPU_TIME(t2)
    write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
@@ -330,25 +337,30 @@ program AtomIon1D
    close(11)
    close(101)
    close(102)
-   close(103)
-   close(104)
    close(200)
    close(300)
    close(301)
    !100 close(203)
 
+  deallocate(S_lm, S_mr)
   deallocate(iwork)
-  deallocate(LSelect)
+  deallocate(Select)
   deallocate(LUFac)
   deallocate(workl)
   deallocate(workd)
   deallocate(Residuals)
-  deallocate(P,QTil,dP)
+  deallocate(P,Q,dP)
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
+  deallocate(op_mat_1)
+  deallocate(op_mat_2)
+  deallocate(op_mat_old_1)
+  deallocate(op_mat_old_2)
 
+  !call deAllocateBasis(PB)
   call deAllocateBasis(CB)
-
+  !if (CouplingFlag .ne. 0) call deAllocateBasis(LB)
+  !if (CouplingFlag .ne. 0) call deAllocateBasis(RB)
   
   deallocate(R)
 
@@ -357,86 +369,301 @@ program AtomIon1D
 1002 format(a64)
 
   stop
-end program AtomIon1D
+end program HHL1DHyperspherical
 
-!
+! subroutine reorder_Q2(state_L, state_H, NumStates, RSteps) !state_L and state_H based on square of arrays being moved out
+! implicit none
+! integer NumStates, RSteps, i, j, swaps, state_H, state_L, iR, iter
+! double precision tmp1, tmp2, P(NumStates, NumStates), tmp_P(State_H-State_L),R !tmp P will hold the array moved out
+
+! open(unit = 102, file = "Q_Matrix.dat")
+! open(unit = 501, file = "reordered_Q.dat")
+
+! do iR = RSteps, 1, -1
+!    print*, 'looping'
+!     read(102,*,END=100) R
+!     do i = 1, 80
+!         read(102,*,END=100) (P(i, j), j=1,NumStates)
+!     enddo
+
+!     !store
+!    do i = 1, NumStates
+!       iter = state_H+1 ! iter = 79+1 = 80, want 8
+!       tmp1 = P(i,state_H+1) ! 80
+!       tmp2 = P(i,state_H)
+!       do while(iter.ne.state_L+1) !3+1 = 4, no more!! when iter = 5, you do still want 4->5, and then 3->4; 
+!          P(i,iter) = P(i,iter-2) !78 -> 80, 77 -> 79, ... , 3 -> 5,
+!          iter = iter-1
+!       enddo
+!       P(i, state_L) = tmp1 !3 = 80
+!       P(i, state_L+1) = tmp2 ! 4 = 70
+!    enddo
+!    do i = 1, NumStates
+!       iter = state_H+1 ! iter = 79+1 = 80, want 8
+!       tmp1 = P(state_H+1, i)
+!       tmp2 = P(state_H, i)
+!       do while(iter.ne.state_L+1) !3+1 = 4, no more!! when iter = 5, you do still want 4->5, and then 3->4; 
+!          P(iter, i) = P(iter-2, i) !78 -> 80, 77 -> 79, ... , 3 -> 5,
+!          iter = iter-1
+!       enddo
+!       P(state_L, i) = tmp1
+!       P(state_L+1, i) = tmp2
+!    enddo
+!    write(501,*) R
+!    do i = 1,NumStates
+!       write(501,*) (P(i,j), j = 1,NumStates)
+!    enddo
+! enddo
+! 100 close(102)
+! close(501)
+
+! end subroutine reorder_Q2
+
+
+! subroutine reorder_P2(state_L, state_H, NumStates, RSteps) !state_L and state_H based on square of arrays being moved out
+! implicit none
+! integer NumStates, RSteps, i, j, swaps, state_H, state_L, iR, iter
+! double precision tmp1, tmp2, P(NumStates, NumStates), tmp_P(State_H-State_L),R !tmp P will hold the array moved out
+
+! open(unit = 101, file = "P_Matrix.dat")
+! open(unit = 500, file = "reordered_P.dat")
+
+! do iR = RSteps, 1, -1
+!    print*, 'looping'
+!     read(101,*,END=100) R
+!     do i = 1, 80
+!         read(101,*,END=100) (P(i, j), j=1,NumStates)
+!     enddo
+
+!     !store
+!    do i = 1, NumStates
+!       iter = state_H+1 !
+!       tmp1 = P(i,state_H+1) !
+!       tmp2 = P(i,state_H)
+!       do while(iter.ne.state_L+1) ! 
+!          P(i,iter) = P(i,iter-2) !
+!          iter = iter-1
+!       enddo
+!       P(i, state_L) = tmp1 !3 = 80
+!       P(i, state_L+1) = tmp2 ! 4 = 70
+!    enddo
+!    do i = 1, NumStates
+!       iter = state_H+1 ! 
+!       tmp1 = P(state_H+1, i)
+!       tmp2 = P(state_H, i)
+!       do while(iter.ne.state_L+1) ! 
+!          P(iter, i) = P(iter-2, i) 
+!          iter = iter-1
+!       enddo
+!       P(state_L, i) = tmp1
+!       P(state_L+1, i) = tmp2
+!    enddo
+!    write(500,*) R
+!    do i = 1,NumStates
+!       write(500,*) (P(i,j), j = 1,NumStates)
+!    enddo
+! enddo
+! 100 close(101)
+! close(500)
+
+! end subroutine reorder_P2
+
+! subroutine populate_operator(op,i, NumStates)
+! implicit none
+! integer x,y,NumStates, op(NumStates,Numstates),i
+! do x = 1, NumStates
+!    do y = 1, NumStates
+!       if(x.eq.y) op(x,y) = 1
+!       if(x.ne.y) op(x,y) = 0
+!    enddo
+! enddo
+! op(i,i) = 0
+! op(i, i+1) = 1
+! op(i+1,i) = 1
+! op(i+1, i+1) = 0
+! end subroutine populate_operator
+
+! subroutine Avoided_CrossingsV3(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state,&
+! min_state, curr_overlaps, last_overlaps, ID)
+! use BasisSets
+! implicit none
+! type(BASIS) CB, LB, RB
+! double precision RDerivDelt, R(RSteps), slopes(2,2), num, den, tmp
+! integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag
+! integer ID, curr_overlaps(2), last_overlaps(2), min_state, slope_req
+! if(iR.lt.RSteps) then
+!    found_flag = 0
+!    swapstate = 0
+!    state = max_state
+!    do while((found_flag.ne.1).and.(state.ne.min_state))
+!       !This part creates a 2x2 matrix to represent the slopes of each point in the "box"
+!       slopes(1,1) = dabs(RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
+!       slopes(1,2) = dabs(RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
+!       slopes(2,1) = dabs(RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
+!       slopes(2,2) = dabs(RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
+!       !This part compares the energy difference between two states at a given hyperradius.
+!       !If the energy difference is zero, then the triad points are exactly at the avoided
+!       !crossing.
+!       if((dabs(CB%nrg_mat(iR, state)-CB%nrg_mat(iR, state+1)).lt.1E-2).or.&
+!       (dabs(LB%nrg_mat(iR, state)-LB%nrg_mat(iR, state+1)).lt.1E-2).or.&
+!       (dabs(RB%nrg_mat(iR, state)-RB%nrg_mat(iR, state+1)).lt.1E-2)) then
+!          !if((ID.ne.1).and.(curr_overlaps(1).eq.0).or.(ID.eq.1)) then !this if statement is no longer necessary; added min_state
+!             curr_overlaps(ID) = 1
+!          !else
+!          !   curr_overlaps(ID) = 0
+!          !endif
+!       else
+!          curr_overlaps(ID) = 0
+!       endif
+!       !The above if statement prevents this type of crossing from being caught "twice" (by the
+!       !iterator through the higher and lower diabat) by only allowing the higher diabat to catch
+!       !a crossing at a given R if the lower diabat has not caught it already.
+!       !Note: this is not an issue for the other method, because the other method uses two states
+!       !and two hyperradii to find a crossing, and once one is found, the ordering of the states changes
+!       !and the same crossing won't be found twice.
+      
+!       !Now, the if-statement for finding a crossing; 100 is a number that seems to work for this system.
+!       !If the energy difference method caugh a crossing that would have been caught at the next iteration
+!       !by the slopes method, the last_overlaps stores that data and doesn't pass the if-statement for that
+!       !next iteration
+!       if((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100&
+!       .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)) then
+!          slope_req = 1
+!       else
+!          slope_req = 0
+!       endif
+!       if(((slope_req.eq.1).and.(last_overlaps(ID).ne.1)).or.((curr_overlaps(ID).eq.1))) then
+!          print*, 'max_state = ', max_state, 'ID = ', ID
+!          print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
+!          'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
+!          print*, 'and curr_overlaps(ID) = ', curr_overlaps(ID)
+!          swapstate = state
+!          ! if(slope_req.eq.1) then
+!          !    call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          !    call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          !    call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          ! endif
+!          ! if((slope_req.eq.0).and.(curr_overlaps(ID).eq.1)) then
+!          !    call swap_full_mod(CB%nrg_mat, swapstate, iR, RSteps, NumStates) !attempt to keep consistency of "where" swapping occurs
+!          !    call swap_full_mod(LB%nrg_mat, swapstate, iR, RSteps, NumStates) !if it is found one hyperradial point sooner than
+!          !    call swap_full_mod(RB%nrg_mat, swapstate, iR, RSteps, NumStates) !where it would/should have been found; the effect
+!          ! endif                                                               !is mostly negligible, though.
+!          call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+         
+!          found_flag = found_flag+1
+!          max_state = state
+!       endif
+!       state = state - 1
+!    enddo
+! endif
+! end subroutine Avoided_CrossingsV3
+
+! subroutine Avoided_CrossingsV2(CB,LB,RB,RDerivDelt,R,iR,RSteps,NumStates,swapstate,max_state)
+! use BasisSets
+! implicit none
+! type(BASIS) CB, LB, RB
+! double precision RDerivDelt, R(RSteps), slopes(2,2), num, den, tmp
+! integer iR, RSteps, NumStates, swapstate, max_state, state, found_flag, overlapping
+
+! if(iR.lt.RSteps) then
+!    found_flag = 0
+!    swapstate = 0
+!    state = max_state !=80 at the beginning of main loop
+!    !print*, 'max_state = ', max_state
+!    do while((found_flag.ne.1).and.(state.ne.0))
+!       slopes(1,1) = dabs(RB%nrg_mat(iR, state+1)-LB%nrg_mat(iR, state+1))/(2*RDerivDelt)
+!       slopes(1,2) = dabs(RB%nrg_mat(iR+1, state+1)-LB%nrg_mat(iR+1, state+1))/(2*RDerivDelt)
+!       slopes(2,1) = dabs(RB%nrg_mat(iR, state)-LB%nrg_mat(iR, state))/(2*RDerivDelt)
+!       slopes(2,2) = dabs(RB%nrg_mat(iR+1, state)-LB%nrg_mat(iR+1, state))/(2*RDerivDelt)
+
+!       if((((dabs(slopes(2,1)-slopes(2,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100)&
+!       .and.((dabs(slopes(1,1)-slopes(1,2))/dabs(slopes(2,1)-slopes(1,2))).gt.100))) then
+!          !print*, 'max_state = ', max_state
+!          !print*, 'Found sharp avoided crossing at iR =', iR, 'R(iR)= ', R(iR),&
+!          !'with energy = ', CB%nrg_mat(iR,state), 'and state = ', state
+!          swapstate = state
+!          call swap_full(CB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          call swap_full(LB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          call swap_full(RB%nrg_mat, swapstate, iR, RSteps, NumStates)
+!          found_flag = found_flag+1
+!          max_state = state
+!       endif
+!       state = state - 1
+!    enddo
+! endif
+! end subroutine Avoided_CrossingsV2
+
+! subroutine swap_full(curr_nrg, swapstate, iR, RSteps, NumStates)
+! implicit none
+! double precision curr_nrg(RSteps, NumStates), tmp_nrg
+! integer swapstate, iR, RSteps, NumStates, i
+! do i = iR+1, RSteps
+!   tmp_nrg = curr_nrg(i,swapstate)
+!   curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+!   curr_nrg(i,swapstate+1) = tmp_nrg
+! enddo
+! end subroutine swap_full
+
+! subroutine swap_full_mod(curr_nrg, swapstate, iR, RSteps, NumStates)
+! implicit none
+! double precision curr_nrg(RSteps, NumStates), tmp_nrg
+! integer swapstate, iR, RSteps, NumStates, i
+! do i = iR, RSteps
+!   tmp_nrg = curr_nrg(i,swapstate)
+!   curr_nrg(i,swapstate) = curr_nrg(i, swapstate+1)
+!   curr_nrg(i,swapstate+1) = tmp_nrg
+! enddo
+! end subroutine swap_full_mod
+
+! subroutine swap_psi_sign(swapstate, psi, xDim, ncv)
+! implicit none
+! double precision psi(xDim,ncv), tmp!(xDim)
+! integer swapstate, i, xDim, ncv
+
+! do i = 1, xDim
+!    tmp = psi(i, swapstate)
+!    psi(i, swapstate) = sign(psi(i, swapstate), psi(i, swapstate+1)) !return value of psi+1 but with original sign of psi
+!    psi(i, swapstate+1) = sign(psi(i, swapstate+1), tmp) !return value of psi, but with original sign of psi+1
+! enddo
+
+! ! tmp = psi(:,swapstate)
+! ! psi(:,swapstate) = psi(:,swapstate+1)
+! ! psi(:,swapstate+1) = tmp
+! end subroutine swap_psi_sign
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!Computes the couplings using the Feynman-Hellmann theorem
+! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix C.  The couplings are then
 
-subroutine CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,S,Perm,ncv,tol)
-  implicit none
-  integer NumStates,HalfBandWidth,MatrixDim,ncv
-  double precision OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv)
-  double precision S(HalfBandWidth+1,MatrixDim),testorth
-  double precision Perm(NumStates,NumStates)
-  double precision test,tol
-  integer i,j,k,n,m
-  double precision, external :: ddot 
-  double precision, allocatable :: TempPsi(:,:),SPsi(:)
-  
-  allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim))
-
-  TempPsi = OldPsi
-  Perm = 0d0
-  do m = 1,NumStates
-     Perm(m,m) = 1d0
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*OldPsi(m) and store in SPsi 
-     do n = m,NumStates
-        testorth=ddot(MatrixDim,NewPsi(:,n),1,SPsi,1)
-        !write(6,*) n,m, '   testorth=',testorth
-        if (abs(abs(testorth)-1d0).lt.tol) then
-           Perm(m,n) = 1d0
-!           write(6,*) m,n
-        else if(abs(testorth).lt.tol) then           
-           Perm(m,n) = 0d0
-        else
-           write(6,*) "testorth outside of tolerance",testorth, "but Perm(", m,n,") set to ",Perm(m,n)
-        endif
-        Perm(n,m) = Perm(m,n)
-     enddo
-  enddo
-  
-  if((Perm(NumStates,NumStates).eq.0d0).and.(Perm(NumStates-1,NumStates-1).eq.1d0)) then
-     Perm(NumStates,NumStates)=1d0
-  endif
-  
-  deallocate(TempPsi,SPsi)
-  
-end subroutine CalcPermutation
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !Computes the couplings using the Feynman-Hellmann theorem
-    ! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix Psi.  
-    subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,ncv)
+      subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D.P,Q)
       implicit none
-      integer NumStates,HalfBandWidth,MatrixDim,ncv
-      double precision Psi(MatrixDim,ncv),U(NumStates,2)
+      integer NumStates,HalfBandWidth,MatrixDim
+      double precision Psi(MatrixDim,NumStates),U(NumStates,2)
       double precision S(HalfBandWidth+1,MatrixDim),D(HalfBandWidth+1,MatrixDim),testorth
-      double precision P(NumStates,NumStates),QTil(NumStates,NumStates)
-      double precision aP
+      double precision P(NumStates,NumStates),Q(NumStates,NumStates),
+
       integer i,j,k,n,m
       double precision, external :: ddot 
       double precision, allocatable :: TempPsi(:,:),SPsi(:), DPsi(:)
 
-      allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim),DPsi(MatrixDim))
+      allocate(TempPsi(MatrixDim,NumStates),SPsi(MatrixDim),DPsi(MatrixDim))
     
       TempPsi = Psi
-      P=0d0
       do m = 1,NumStates
          call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,D,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,DPsi,1)   ! Calculate the vector D*Psi(m) and store in DPsi
          call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*Psi(m) and store in SPsi 
-         do n = m+1,NumStates
+         do n = 1,NumStates
+
             testorth=ddot(MatrixDim,TempPsi(:,n),1,SPsi,1)
-            !write(6,*) n,m, '   testorth=',testorth
+            write(6,*) n,m, '   testorth=',testorth
             aP = 1d0/(U(m,1) - U(n,1))
             P(n,m) = aP*ddot(MatrixDim,TempPsi(:,n),1,DPsi,1)
-            P(m,n) = -P(n,m)
          enddo
       enddo
-      QTil = matmul(P,P) 
-!!$      do i = 1, NumStates
-!!$         do j = 1, NumStates
-!!$            write(6,*) i,j,QTil(i,j)
-!!$         enddo
-!!$      enddo
+      Q = matmul(P,P)
+
+
       deallocate(TempPsi,SPsi,DPsi)
 
       return
@@ -620,7 +847,13 @@ contains
       calc_P_term_1 = term_1_mu_nu
    end function calc_P_term_1
 end subroutine calcCouplings_v2
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!subroutine calcpsandqs(LBarray, CBarray, RBarray, PBArray, HalfBandWidth, NumStates, RDerivDelt) !!see if you can make an array with type bases...
+
+!   call calcCouplings_v2(LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
+
+!end subroutine
+
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
 use BasisSets
 implicit none
@@ -851,21 +1084,16 @@ subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
 end subroutine CalcOverlap
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This new subroutine computes the Hamiltonian, Overlap, and the P-matrix
-! NOTE: variables such as H,S,D are output of this code, but note that
-! many are ultimately part of type BasisSet because they are elements of CB.
-! In the case of CB%x and CB%V the asignment is made directly through CB.
-!
 subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
-     xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D,CB)
-  use BasisSets
+xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
   implicit none
-  TYPE(basis) CB
   double precision, external :: VSech
   integer Order,LegPoints,xDim,xNumPoints,xBounds(*),HalfBandWidth
   double precision alpha,R,mu,mgamma,theta_c,C4,L,mi
   double precision xPoints(*),xLeg(*),wLeg(*)
   double precision H(HalfBandWidth+1,xDim),S(HalfBandWidth+1,xDim),D(HalfBandWidth+1,xDim)  ! D is a matrix with elements <B_i|dH/dR|B_j> needed for the P-matrix
   double precision u(LegPoints,xNumPoints,xDim),uxx(LegPoints,xNumPoints,xDim)
+
   integer ix,ixp,kx,lx
   integer i1,i1p
   integer Row,NewRow,Col
@@ -874,11 +1102,13 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
   double precision Rall,rai,xai
   double precision u1,sys_ss_pot,V12,V23,V31
   double precision VInt,VTempInt,potvalue, xTempV,xTempS
-  double precision x,ax,bx,xScaledZero,xTempT,xTempVHO,xTempVC4
+  !     double precision TempPot,VInt,VTempInt
+  double precision x,ax,bx,xScaledZero,xTempT,xTempS,xTempVHO,xTempVC4
   double precision, allocatable :: Pot(:,:)
   double precision, allocatable :: xIntScale(:),xT(:,:),xV(:,:),xVHO(:,:),xVC4(:,:)
   double precision, allocatable :: cosx(:,:),sinx(:,:),xS(:,:)
   double precision, allocatable :: XX(:,:),YY(:,:)
+
   double precision mu12,r0diatom,dDiatom
 
 
@@ -905,7 +1135,6 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
      xScaledZero = 0.5d0*(bx+ax)
      do lx = 1,LegPoints
         x = xIntScale(kx)*xLeg(lx)+xScaledZero
-        CB%x(lx,kx) = x
         cosx(lx,kx) = dcos(x)
         sinx(lx,kx) = dsin(x)
      enddo
@@ -925,17 +1154,14 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
         YY(lx,kx) = C4/(xai**4)
         potvalue = -YY(lx,kx)/R**4 + 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
-        CB%V(lx,kx) = alpha*potvalue
 !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
      enddo
   enddo
-  xV = 0d0
-  xT = 0d0
-  xS = 0d0
-  xVHO = 0d0
-  xVC4 = 0d0
+
   do ix = 1,xDim
      do ixp = max(1,ix-Order),min(xDim,ix+Order)
+        xT(ix,ixp) = 0.0d0
+        xV(ix,ixp) = 0.0d0
         do kx = kxMin(ixp,ix),kxMax(ixp,ix)
            xTempT = 0.0d0
            xTempV = 0.0d0
@@ -960,19 +1186,16 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
      enddo
   enddo
 
-  H = 0.0d0
-  S = 0d0
-  D = 0d0
+  H = 0.0d0      
   do ix = 1,xDim
      Row=ix
      do ixp = max(1,ix-Order),min(xDim,ix+Order)
         Col = ixp
         if (Col .ge. Row) then
            NewRow = HalfBandWidth+1+Row-Col
-           S(NewRow,Col) = xS(ix,ixp)
+           S(NewRow,Cos) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-           !D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
-           D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
 !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
@@ -1164,11 +1387,11 @@ subroutine CalcQMatrix(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,
   return
 end subroutine CalcQMatrix
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc      
-subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,OldPsi,NewPsi)
+subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,mPsi,rPsi)
   implicit none
   integer NumStates,HalfBandWidth,MatrixDim,ncv
   double precision S(HalfBandWidth+1,MatrixDim),Psi(MatrixDim,ncv)
-  double precision OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv)
+  double precision mPsi(MatrixDim,ncv),rPsi(MatrixDim,ncv)
 
   integer i,j
   double precision Phase,ddot
@@ -1177,11 +1400,13 @@ subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,OldPsi,NewPsi)
   allocate(TempPsi(MatrixDim))
 
   do i = 1,NumStates
-     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,OldPsi(:,i),1,0.0d0,TempPsi,1) ! TempPsi stores S*OldPsi
-     Phase = ddot(MatrixDim,NewPsi(:,i),1,TempPsi,1) ! Computes overlap of NewPsi with TempPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rPsi(1,i),1,0.0d0,TempPsi,1)
+     Phase = ddot(MatrixDim,mPsi(1,i),1,TempPsi,1)
      if (Phase .lt. 0.0d0) then
-        NewPsi(:,i) = -NewPsi(:,i)
-!        write(6,*) "i, overlap = ", i, Phase, ddot(MatrixDim,NewPsi(:,i),1,TempPsi,1)
+        do j = 1,MatrixDim
+           rPsi(j,i) = -rPsi(j,i)
+           write(170) 'phase fix at: ', 'j=',j, 'i=',i
+        enddo
      endif
   enddo
 
@@ -1350,10 +1575,10 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
         xPoints(i)=(xPoints(i-1)+xPoints(i)+xPoints(i+1))/3.d0
      enddo
   enddo
-!  do i = 1, xNumPoints
-!     write(20,*) i, xPoints(i)
-!  enddo
-!  write(20,*) ' '
+  do i = 1, xNumPoints
+     write(20,*) i, xPoints(i)
+  enddo
+  write(20,*) ' '
   !      write(96,'(100e20.10)') R, (xPoints(k),k=1,xNumPoints)
 
 15 format(6(1x,1pd12.5))

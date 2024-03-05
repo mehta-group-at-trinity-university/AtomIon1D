@@ -1,5 +1,5 @@
 Number of energies		  PsiFlag		    CouplingFlag    troubleshooting    
-      40                 0            1                   0
+      80                 0            1                   0
 
 Legendre File
 Legendre.dat
@@ -7,17 +7,17 @@ Legendre.dat
 Legendre Points
      10
 
- Shift		      Shift2		    Order     Left	  Right 
--2000.0d0      -0.01d0        	5         0	    0
+ Shift		Shift2		Order    Left	Right 
+-2000.0d0      -0.01d0        	5         3	 3
 
    alpha          mi          	      ma	         DD         L
   1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
 
-xPoints    f-omega 	     Nbs	      C4     	      		 phi			Dtol
-200 	   3.2d5	     2                1.121d-56 	  -0.106877437		0.1d0
+xPoints    f-omega 	     Nbs	      C4     	      		 phi
+200 	   3.2d5		     1                1.121d-56 	 	 -0.106877437
 
  RSteps   RDerivDelt     RFirst    	      RLast
-  1000       0.0001d0      0.75d0    	      80.0d0
+  1000       0.0001d0      0.75d0    	      40.0d0
 
 
 ! Pi/2=1.5707963267948966
