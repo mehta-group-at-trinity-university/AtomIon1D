@@ -2,7 +2,7 @@ module BasisSets
    implicit none
 TYPE basis
    integer Left, Right, xDim
-   double precision, allocatable :: u(:,:,:), uxx(:,:,:)
+   double precision, allocatable :: x(:,:),V(:,:),u(:,:,:), uxx(:,:,:)
    double precision, allocatable :: S(:,:)
    double precision, allocatable :: H(:,:)
    double precision, allocatable :: D(:,:)
@@ -22,6 +22,8 @@ contains
       if (Right .eq. 2) T%xDim = T%xDim + 1
       MatrixDim = T%xDim
       ncv = 2*NumStates
+      allocate(T%x(LegPoints, xNumPoints))
+      allocate(T%V(LegPoints, xNumPoints))
       allocate(T%u(LegPoints, xNumPoints, T%xDim))
       allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
       allocate(T%xBounds(xNumPoints+2*Order))
@@ -33,6 +35,8 @@ contains
    subroutine deAllocateBasis(T)
       implicit none
       TYPE(basis) T
+      deallocate(T%x)
+      deallocate(T%V)
       deallocate(T%u)
       deallocate(T%uxx)
       deallocate(T%xBounds)
@@ -253,7 +257,7 @@ program AtomIon1D
       call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
       call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
       call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
-         LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D)
+         LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB)
       call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
            NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
       call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
@@ -305,8 +309,8 @@ program AtomIon1D
          write(101,*) (P(i,j), j=1,NumStates)
          write(102,*) (QTil(i,j), j=1,NumStates)
       enddo
-      write(103,*) R(iR), P(1,NumStates),P(1,NumStates-1),P(2,NumStates),P(2,NumStates-1),P(1,2),P(1,3),P(1,4),P(1,5)!,Perm(1,1),Perm(1,2),Perm(2,2),Perm(2,3),Perm(3,3),Perm(3,4)
-      write(104,*) R(iR), (-QTil(i,i)*R(iR)**2, i=1,1)
+      write(103,*) R(iR),(P(1,i)*R(iR),i=1,NumStates)
+      write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
       !--------------------------------------------------------------------------!
       OldPsi = CB%Psi
 !    Adjusting Shift
@@ -845,9 +849,15 @@ subroutine CalcOverlap(Order,xPoints,LegPoints,xLeg,wLeg,xDim,&
 end subroutine CalcOverlap
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This new subroutine computes the Hamiltonian, Overlap, and the P-matrix
+! NOTE: variables such as H,S,D are output of this code, but note that
+! many are ultimately part of type BasisSet because they are elements of CB.
+! In the case of CB%x and CB%V the asignment is made directly through CB.
+!
 subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
-xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
+     xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D,CB)
+  use BasisSets
   implicit none
+  TYPE(basis) CB
   double precision, external :: VSech
   integer Order,LegPoints,xDim,xNumPoints,xBounds(*),HalfBandWidth
   double precision alpha,R,mu,mgamma,theta_c,C4,L,mi
@@ -893,6 +903,7 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
      xScaledZero = 0.5d0*(bx+ax)
      do lx = 1,LegPoints
         x = xIntScale(kx)*xLeg(lx)+xScaledZero
+        CB%x(lx,kx) = x
         cosx(lx,kx) = dcos(x)
         sinx(lx,kx) = dsin(x)
      enddo
@@ -912,6 +923,7 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D)
         YY(lx,kx) = C4/(xai**4)
         potvalue = -YY(lx,kx)/R**4 + 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
+        CB%V(lx,kx) = alpha*potvalue
 !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
      enddo
   enddo
