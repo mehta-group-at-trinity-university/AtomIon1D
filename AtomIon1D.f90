@@ -312,7 +312,8 @@ program AtomIon1D
          write(102,*) (QTil(i,j), j=1,NumStates)
       enddo
       write(103,*) R(iR),(P(1,i)*R(iR),i=1,NumStates)
-      write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
+      !write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
+      write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
       !--------------------------------------------------------------------------!
       OldPsi = CB%Psi
 !    Adjusting Shift
