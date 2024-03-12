@@ -235,6 +235,7 @@ program AtomIon1D
    CB%Left = Left
    CB%Right = Right
    RChange=100.d0
+   write(200,*) "#", RSteps, NumStates
    do iR = RSteps,1,-1 
       call CPU_TIME(t1)
       NumFirst=NumStates
@@ -359,7 +360,6 @@ program AtomIon1D
 
   stop
 end program AtomIon1D
-
 !
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
@@ -432,7 +432,7 @@ end subroutine CalcPermutation
             P(m,n) = -P(n,m)
          enddo
       enddo
-      QTil = matmul(P,P) 
+      QTil = -matmul(P,P) 
 !!$      do i = 1, NumStates
 !!$         do j = 1, NumStates
 !!$            write(6,*) i,j,QTil(i,j)

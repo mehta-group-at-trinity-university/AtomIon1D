@@ -17,7 +17,7 @@ xPoints    f-omega 	     Nbs	      C4     	      		 phi			Dtol
 100 	   3.2d5	     2                1.121d-56 	  -0.106877437		0.1d0
 
  RSteps   RDerivDelt     RFirst    	      RLast
-  1000       0.0001d0      0.75d0    	      40.0d0
+  1000       0.0001d0      0.75d0    	      50.0d0
 
 
 ! Pi/2=1.5707963267948966
