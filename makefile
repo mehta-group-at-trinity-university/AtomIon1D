@@ -14,9 +14,6 @@ AtomIon1D.x:	   ${OBJS}
 AtomIon1D.o: AtomIon1D.f90
 	${CMP} ${DEBUG} ${FORCEDP} ${CMPFLAGS} -c AtomIon1D.f90
 
-#matrix_stuff.o: matrix_stuff.f
-#	${CMP} ${FORCEDP} ${CMPFLAGS} -c matrix_stuff.f
-
 Bsplines.o:	Bsplines.f
 	${CMP} ${FORCEDP} ${CMPFLAGS} -c Bsplines.f
 

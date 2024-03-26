@@ -62,7 +62,7 @@ program AtomIon1D
    integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
    integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
    integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
-   double precision alpha,tmp_alpha,tmp_beta,mass,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
+   double precision alpha,tmp_alpha,tmp_beta,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
    double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
    double precision, allocatable :: R(:),Perm(:,:),ComposedPerm(:,:),AbsPerm(:,:)
    double precision, allocatable :: xPoints(:)
@@ -75,8 +75,8 @@ program AtomIon1D
    integer swapstate,iparam(11),ncv,info,troubleshooting
    integer i,j,k,iR,NumFirst,NumBound
    integer LeadDim,MatrixDim,HalfBandWidth
-   integer xDim, Nbs
-   integer, allocatable :: iwork(:)
+   integer xDim, Nbs, NumOutputChannels
+   integer, allocatable :: iwork(:), WriteChannels(:)
    double precision Tol,RChange
    double precision TotalMemory
    double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
@@ -91,7 +91,7 @@ program AtomIon1D
    double precision ur(1:50000),acoef,bcoef,diff
    double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
    double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
-   double precision, external :: ddot
+   double precision, external :: ddot, kdelta
    character*64 LegendreFile
    character*64 leftnrg
    common /Rvalue/ Rvalue      
@@ -140,6 +140,7 @@ program AtomIon1D
    read(5,*)
    read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol
    write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol
+
    omega = 2d0*Pi*omega
    lho = dsqrt(hbar/mi/omega)
    Rstar = dsqrt(2*mu12*C4/hbar**2)
@@ -160,6 +161,14 @@ program AtomIon1D
    read(5,*)
    read(5,*) RSteps,RDerivDelt,RFirst,RLast
    write(6,*) RSteps,RDerivDelt,RFirst,RLast
+   read(5,*)
+   read(5,*)
+   read(5,*) NumOutputChannels
+   write(6,*) "NumOutputChannels = ", NumOutputChannels
+   allocate(WriteChannels(NumOutputChannels))
+   read(5,*)
+   read(5,*)
+   read(5,*) WriteChannels!(WriteChannels(i), i = 1, NumOutputChannels)
 
   
   allocate(R(RSteps))
@@ -229,13 +238,14 @@ program AtomIon1D
    open(unit = 102, file = "QTil_Matrix.dat")
    open(unit = 103, file = "QuickPMat.dat")
    open(unit = 104, file = "QuickQTilMat.dat")
+   open(unit = 105, file = "VQmat.dat")
 
    allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
    
    CB%Left = Left
    CB%Right = Right
    RChange=100.d0
-   write(200,*) "#", RSteps, NumStates
+   write(200,*) "#", RSteps, NumOutputChannels
    do iR = RSteps,1,-1 
       call CPU_TIME(t1)
       NumFirst=NumStates
@@ -284,7 +294,6 @@ program AtomIon1D
       NewPsi = 0d0
       NewPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR))
 
-
       !--- Check the phase consistency of NewPsi, and fix phases ------
       if(iR.lt.RSteps) then
          OldPsi = 0d0
@@ -297,7 +306,7 @@ program AtomIon1D
                AllPsis(j,:,iR) = -AllPsis(j,:,iR)
             endif
          enddo
-
+         
       endif
       !--------------------------------------------
       
@@ -305,16 +314,21 @@ program AtomIon1D
 
       !-------- Couplings from the diabatized eigenstates -------------!
       call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,QTil,ncv)      
-      write(200,20) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
+      write(200,20) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies      
       write(101,*) R(iR)
       write(102,*) R(iR)
-      do i=1,NumStates
-         write(101,*) (P(i,j), j=1,NumStates)
-         write(102,*) (QTil(i,j), j=1,NumStates)
+      write(105,*) R(iR)
+      do i=1,NumOutputChannels
+         write(101,*) (P(WriteChannels(i),WriteChannels(j)), j=1,NumOutputChannels)
+         write(102,*) (QTil(WriteChannels(i),WriteChannels(j)), j=1,NumOutputChannels)
+         write(105,*) ( (AllEnergies(WriteChannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) )*kdelta(i,j) &
+              +  QTil(WriteChannels(i),WriteChannels(j))/(2d0*mu), j = 1, NumOutputChannels)
       enddo
-      write(103,*) R(iR),(P(1,i)*R(iR),i=1,NumStates)
+      write(103,*) R(iR),(P(WriteChannels(1),WriteChannels(i))*R(iR),i=1,NumOutputChannels)
+      write(104,*) R(iR),(QTil(WriteChannels(i),WriteChannels(i))*R(iR)**2,i=1,NumOutputChannels)
+
       !write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
-      write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
+      !write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
       !--------------------------------------------------------------------------!
       OldPsi = CB%Psi
 !    Adjusting Shift
@@ -334,6 +348,7 @@ program AtomIon1D
    close(102)
    close(103)
    close(104)
+   close(105)
    close(200)
    close(300)
    close(301)
@@ -1629,3 +1644,13 @@ end subroutine CalcEigenErrors
 !!$         
 
 
+double precision function kdelta(mch,nch)
+  implicit none
+  integer mch,nch
+  if (mch.eq.nch) then
+     kdelta = 1.0d0
+  else 
+     kdelta = 0.0d0
+  endif
+  return
+end function kdelta
