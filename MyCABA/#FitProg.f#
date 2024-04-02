@@ -38,9 +38,8 @@ c     Note: All open channels should precede any closed channels in *
 c     the matrix setup.                                             *
 c****************************************************************
 
-      open(18, file = 'Fit.data')
-      open(19, file = 'FitLeff.data')
-      write(18,*) MaxChannels,MaxNumDataPts
+
+      write(18,*)MaxChannels,MaxNumDataPts
 c     mass = (m1*m2*m3*m4/(m1+m2+m3+m4))**(1.d0/3.d0)
       mi=170.9363230d0
       ma=6.015122d0
@@ -153,6 +152,7 @@ c     write(19,*)'FitRangeMin =   OPTIMIZED'
       
       DO j=1,mrdim
 
+         
          ncount = 0 
          FitRangeMinVar = FitRangeMax-Rdelay
          LeffMin = 1.d5        
@@ -168,21 +168,21 @@ c     write(19,*)'FitRangeMin =   OPTIMIZED'
 
 c     Uu-(1/2mu)*Quu : (BC-BC)
          IF(thresh(j).LT.0.d0) THEN
-            IF (Leff(j).EQ.0) THEN   
+!            IF (Leff(j).EQ.0) THEN   
                kExponents(1)=0.0d0
                kExponents(2)=2.0d0
-               kExponents(3)=3.0d0
-            ELSE
-               kExponents(1)=0.0d0
-               kExponents(2)=2.0d0
-               kExponents(3)=3.0d0
+               kExponents(3)=4.0d0
+!            ELSE
+!               kExponents(1)=0.0d0
+!               kExponents(2)=2.0d0
+!               kExponents(3)=4.0d0
             ENDIF
          ENDIF
 c     Uu-(1/2mu)*Quu : (CC-CC)
          IF(thresh(j).GE.0.d0) THEN
-            kExponents(1)=2.0d0
-            kExponents(2)=3.0d0
-            kExponents(3)=4.0d0
+            kExponents(1)=0.0d0
+            kExponents(2)=-2.0d0
+            kExponents(3)=2.0d0
          ENDIF
 
          CALL FitTail(NumFitTerms,kExponents,xPoints,yPoints,Errors,
@@ -194,11 +194,11 @@ c     Uu-(1/2mu)*Quu : (CC-CC)
          ENDDO
 
          if (j.le.NumBound)then
-            if (Leff(j).eq.0) then
-               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2))))
-            else
-               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2))))
-            endif
+!            if (Leff(j).eq.0) then
+               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2)))) ! Solve from leff from the fit.
+!            else
+!               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2))))
+!            endif
          else
             ang = 0.5d0*(-1.0d0 + dsqrt(1.0d0 + Cfactor*abs(VQFit(j,j,1))))
          endif
@@ -236,35 +236,35 @@ c     Uu-(1/2mu)*Quu
             IF (j.EQ.k) THEN  ! Diagonal initial guesses
                IF (thresh(j).LT.0.d0) THEN
 c     (BC-BC)
-                  IF (Leff(j).EQ.0) THEN   
+                  !IF (Leff(j).EQ.0) THEN   
                      kExponents(1)=0.0d0
                      kExponents(2)=2.0d0
-                     kExponents(3)=3.0d0
-                  ELSE
-                     kExponents(1)=0.0d0
-                     kExponents(2)=2.0d0
-                     kExponents(3)=3.0d0
-                  ENDIF
+                     kExponents(3)=4.0d0
+                  !ELSE
+                  !   kExponents(1)=0.0d0
+                  !   kExponents(2)=2.0d0
+                  !   kExponents(3)=4.0d0
+                  !ENDIF
                ELSE
 c     (CC-CC)
                   kExponents(1)=-2.0d0 ! atom-ion bound channels go as R^2 at long range so fit to a harmonic potential
                   kExponents(2)=0.0d0
-                  kExponents(3)=-3.0d0
+                  kExponents(3)=2.0d0
                ENDIF
             ENDIF
 
 c     Quv : (BC-BC)        
             IF (j.NE.k) THEN  !off-diagonal initial guesses for Quv among 2-body type channels
                IF (thresh(j) .LT. 0.0d0 .AND. thresh(k) .LT. 0.0d0) THEN
-                  IF ( Leff(j) .EQ. Leff(k) ) THEN
+                  !IF ( Leff(j) .EQ. Leff(k) ) THEN
                      kExponents(1)=2.0d0
                      kExponents(2)=3.0d0
                      kExponents(3)=4.0d0
-                  ELSE
-                     kExponents(1)=2.0d0 ! the real coupling behaves like : exp(-R)
-                     kExponents(2)=3.0d0
-                     kExponents(3)=4.0d0
-                  ENDIF   
+                  !ELSE
+                  !   kExponents(1)=2.0d0 ! the real coupling behaves like : exp(-R)
+                  !   kExponents(2)=3.0d0
+                  !   kExponents(3)=4.0d0
+                  !ENDIF   
                ENDIF
             ENDIF
 

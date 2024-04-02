@@ -5,7 +5,7 @@ c234567890
       integer Order,ishift,NumRmatch,NumNewSectors
       integer NumInpChannels,NumChannels,NumOpenChannels
       integer NumOpenL, NumOpenR, NumTotStates,NumSectors
-      integer NumDataPoints,NumBoxes,Loops_E
+      integer NumDataPoints,NumBoxes,NumE
       integer TotalAngMomentum
       integer, allocatable :: MEMap(:,:),NumberL(:),NumberR(:),NumSectorsBox(:)
       double precision, allocatable :: Thresholds(:),leff(:),xPoints(:)
@@ -30,7 +30,7 @@ c234567890
       double precision TotalMemory,ddot,Mass,kelvinPERau
       double precision m1,m2,m3,ma,mi
       double precision Energy,Einput,RMatch,RMatch1,f,fp,g,gp,Pi,Wronskian
-      double precision, allocatable :: work(:)
+      double precision, allocatable :: work(:), Egrid(:)
       double precision, allocatable :: xLeg(:),wLeg(:)
       double precision, allocatable :: u(:,:,:),ux(:,:,:),uxx(:,:,:)
       double precision, allocatable :: uTemp(:),uxTemp(:)
@@ -42,8 +42,8 @@ c234567890
 
       double precision, allocatable :: psi_in(:,:),solution(:,:),deriv(:)
 
-      double precision, allocatable :: Tmatrix(:,:)
-      double precision, allocatable :: TmatrixAvg(:,:)
+      double precision, allocatable :: Tmatrix(:,:),Kmatrix(:,:)
+      double precision, allocatable :: TmatrixAvg(:,:),KmatrixAvg(:,:)
 
 
       double precision, allocatable :: CrossSections(:,:)
@@ -57,9 +57,9 @@ c234567890
 
       double precision EinputAux
       double precision Ri,Rf,Xi,Xf,StepX,R(1:100000000)
-      double precision Emax,wlenght,rstep,XP
+      double precision Emin,Emax,wlenght,rstep,XP
       integer NPoints,npwave,NPointsW,NPS
-      double precision URmin,wlenghti,rstepi,dumb
+      double precision URmin,wlenghti,rstepi,dumb,ascat
       integer ncount,ndumb
       character*64 GridName
 
@@ -83,7 +83,7 @@ c     read in Gauss-Legendre info
       read(5,*)
 
       read(5,*)
-      read(5,*) TotalAngMomentum,Einput,Einc,Loops_E,ithresh
+      read(5,*) TotalAngMomentum,Emin,Emax,NumE,ithresh
       read(5,*)
 
       read(5,*)
@@ -114,10 +114,12 @@ c     allocate(leff(NumberL(NumBoxes)),Thresholds(NumberR(NumBoxes)))
       do i = 1,NumberR(NumBoxes)
          read(5,*)leff(i),Thresholds(i)
       enddo
-
+      Emin = Emin + Thresholds(ithresh)  ! Emin and Emax are read in as collision energies, but should be absolute energies.
+      Emax = Emax + Thresholds(ithresh)
       read(5,*)
       read(5,*)
       read(5,1002) PFile
+      write(6,*) "PFile = ", PFile
       read(5,*)
       read(5,*)
       read(5,1002) QFile  
@@ -133,8 +135,8 @@ c     Thresholds(i) = 2B Energies from the Extrapolation Code
       read(19,*)
       read(19,*)
       read(19,*)
-      do i=1,NumTotStates
-         read(19,*)ndumb,Thresholds(i),dumb,dumb,dumb
+      do i=1,NumChannels!NumTotStates
+         read(19,*) ndumb, Thresholds(i),dumb,dumb,dumb
 !--------------------------------------------
 ! (NPM) The following would be appropriate for a series of three-body channels that converge to zero as R->infty
 c$$$  if (Thresholds(i).gt.0.d0) then
@@ -143,8 +145,9 @@ c$$$  endif
 !--------------------------------------------
       enddo
       close(19)
-
-      Energy = Einput + Thresholds(ithresh)
+      allocate(Egrid(NumE))
+      call GridMaker(Egrid, NumE, Emin, Emax, 'linear')
+      Energy = Egrid(1)!Einput + Thresholds(ithresh)
 
 c     Checking WhereStart
       open(18,file=FitFile,status='old')
@@ -156,13 +159,14 @@ c     Checking WhereStart
       do i=1,NumDataPoints
          read(300,*)xdata(i)
          do j=1,Numchannels
-            read(300,301)(VQmat(i,j,k),k=1,Numchannels)
+            read(300,11)(VQmat(i,j,k),k=1,Numchannels)
          enddo
          do j=Numchannels+1,NumTotStates
-            read(300,301)
+            read(300,11)
          enddo
       enddo
       close(300)
+ 11   format(1P,100e22.12)
  301  format(100(e18.12,1x))
 c     301  format(100(e20.12,1x))
 
@@ -192,7 +196,7 @@ c     RADIAL GRID
       enddo
 
       Pi = dacos(-1.d0)
-      Emax = 3.166815355d-08    !(10^4 muK - Max income Energy)
+!      Emax = 1.49d0 !3.166815355d-08    !(10^4 muK - Max income Energy)
       wlenght = 2.d0*Pi/dsqrt(2.d0*Mass*(Emax-Thresholds(1)))
       rstep = wlenght/dfloat(npwave) 
 
@@ -333,9 +337,9 @@ c     enddo
      >     PFile,QFile,xdata,VQmat,Pmat) ! read in the P, VQ matrix data to be interpolated later 
 
 
-
-      do ie=1,Loops_E
-
+      
+      do ie=1,NumE
+         energy = Egrid(iE)
 c     if (energy.gt.Thresholds(ithresh+1)) goto 1234 
 c     This condition is valid for the relaxation problem. 
 c     It means that for energy.gt.Thresholds(ithresh+1) a 
@@ -460,9 +464,11 @@ c     starting matching section
 
          allocate(BoxAvgPartial(NumberR(NumBoxes),NumberR(NumBoxes)))
          allocate(TmatrixAvg(NumOpenR,NumOpenR))
+         allocate(KmatrixAvg(NumOpenR,NumOpenR))
          BoxAvg = 0.0d0
          BoxAvgPartial = 0.0d0
          TmatrixAvg = 0.0d0
+         KmatrixAvg = 0.0d0
 
          do ir=1,NumRmatch
 
@@ -567,16 +573,19 @@ c     starting matching section
 c     calculate S-matrix and scattering cross sections
 c     CrossSections is actually the K_3 (or VR) rate constant
 
-            allocate(Smatrix(NumOpenR,NumOpenR),Tmatrix(NumOpenR,NumOpenR))
+            allocate(Smatrix(NumOpenR,NumOpenR),Tmatrix(NumOpenR,NumOpenR),Kmatrix(NumOpenR,NumOpenR))
             allocate(CrossSections(NumOpenR,NumOpenR))
 
-            call CalcSmatrix(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
-     >           solution,deriv,Smatrix,Tmatrix,CrossSections)
+c            call CalcSmatrix(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
+c     >           solution,deriv,Smatrix,Tmatrix,CrossSections)
+            call CalcSmatrix1D(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
+     >           solution,deriv,Smatrix,Tmatrix,CrossSections,Kmatrix)
 
             do i = 1,NumOpenR
                do j = 1,NumOpenR
                   BoxAvgPartial(i,j) = BoxAvgPartial(i,j) + CrossSections(i,j)
                   TmatrixAvg(i,j) = TmatrixAvg(i,j) + Tmatrix(i,j)
+                  KmatrixAvg(i,j) = KmatrixAvg(i,j) + Kmatrix(i,j)
                enddo
             enddo
 
@@ -605,10 +614,10 @@ c     enddo
 !     write(6,*)'Rate Constant K_3(cm^6/sec)'
 !     write(6,*) Crosstot
 
-c     write(29+Loops_E,28)Rmatch,Crosstot,CrossSections(1:ithresh-1,ithresh)
+c     write(29+NumE,28)Rmatch,Crosstot,CrossSections(1:ithresh-1,ithresh)
 c     write(*,20)(energy-Thresholds(ithresh))/muK,1.d0*ir,((CrossSections(i,j),j=1,NumOpenR),i=1,NumOpenR)
 
-            deallocate (Smatrix,Tmatrix,CrossSections)
+            deallocate (Smatrix,Tmatrix,CrossSections,Kmatrix)
             deallocate(solution,deriv)
 
          enddo
@@ -618,46 +627,50 @@ c     write(*,20)(energy-Thresholds(ithresh))/muK,1.d0*ir,((CrossSections(i,j),j
             do j = 1,NumberR(NumBoxes)
                BoxAvgPartial(i,j) = BoxAvgPartial(i,j)/dfloat(NumRmatch)
                TmatrixAvg(i,j) = TmatrixAvg(i,j)/dfloat(NumRmatch)
+               KmatrixAvg(i,j) = KmatrixAvg(i,j)/dfloat(NumRmatch)
             enddo
          enddo
 
-         do ic = 1,ithresh-1
+c         do ic = 1,ithresh-1
 c     Partial Vibrational Relaxation Rate
-            write(9+ic,20)(energy-Thresholds(ithresh))/muK,(BoxAvgPartial(ic,j),j=ithresh,ithresh) 
+c            write(9+ic,20)(energy-Thresholds(ithresh))/muK,(BoxAvgPartial(ic,j),j=ithresh,ithresh) 
 c     Partial Recombination Rate
 c     write(9+ic,20)(energy-Thresholds(ithresh))/muK,BoxAvgPartial(ic,ithresh:NumberR(NumBoxes))
-         enddo
+c         enddo
 
          BoxAvg = BoxAvg/float(NumRmatch)
 !     write(6,*)
 !     write(6,*)'Box average results'
 !     write(6,*)BoxAvg
 c     write(25,*)energy/3.165226467522434d-12,BoxAvg
-         write(25,*)(energy-Thresholds(ithresh))/muK,BoxAvg
+c         write(25,*)(energy-Thresholds(ithresh))/muK,BoxAvg
 
 c     Tmatrix outPut      
-         write(1000,20)(energy-Thresholds(ithresh))/muK,((TmatrixAvg(i,j),j=1,NumOpenR),i=1,NumOpenR)
+c         write(1000,20)(energy-Thresholds(ithresh))/muK,((TmatrixAvg(i,j),j=1,NumOpenR),i=1,NumOpenR)
 
          call cpu_time(timep)
 c     Total and Partial Vibrational Relaxation Rate
 c     write(*,20)(energy-Thresholds(ithresh))/muK,
 c     .           ((BoxAvgPartial(i,j),j=ithresh,ithresh),i=1,ithresh-1),BoxAvg,timep-secp
-         write(*,20)(energy-Thresholds(ithresh))/muK,BoxAvg,
-     .        ((BoxAvgPartial(i,j),j=ithresh,NumOpenR),i=1,ithresh-1),timep-secp
+c         write(*,20)(energy-Thresholds(ithresh))/muK,BoxAvg,
+c     .        ((BoxAvgPartial(i,j),j=ithresh,NumOpenR),i=1,ithresh-1),timep-secp
+         ascat = 1/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh))
+         write(6,*)(energy-Thresholds(ithresh)), ascat, timep-secp
+         write(25,*)(energy-Thresholds(ithresh)), ascat, timep-secp
 
 
          call cpu_time(timep)
          secp = timep 
 
-         deallocate(BoxAvgPartial,TmatrixAvg)
+         deallocate(BoxAvgPartial,TmatrixAvg,KmatrixAvg)
          deallocate(psi_in,b)
 
 c     energy = Einput + float(ie)*Einc + Thresholds(ithresh)
 c     energy = Einput*(10.d0**(float(ie)*0.1d0)) 
-
-         EinputAux = Einput*(10.d0**(float(ie)*0.1d0)) 
-         energy = (EinputAux+Thresholds(ithresh))
-
+         
+c         EinputAux = Einput*(10.d0**(float(ie)*0.1d0)) 
+c         energy = (EinputAux+Thresholds(ithresh))
+         
 
       enddo
 
@@ -2013,12 +2026,12 @@ C---------- Last line of RYBESL ----------
        read(200,*) xdata(i)
        read(300,*)
        do j=1,Numchannels
-        read(200,3001)(Pmat(i,j,k),k=1,Numchannels)
-        read(300,3001)(VQmat(i,j,k),k=1,Numchannels)
+        read(200,11)(Pmat(i,j,k),k=1,Numchannels)
+        read(300,11)(VQmat(i,j,k),k=1,Numchannels)
        enddo
        do j=Numchannels+1,NumTotStates
-        read(200,3001)
-        read(300,3001)
+        read(200,11)
+        read(300,11)
        enddo
       enddo
 
@@ -2051,7 +2064,8 @@ c      enddo
 
       close(200)
       close(300)
-c3001 format(100(e20.12,1x))
+c     3001 format(100(e20.12,1x))
+ 11   format(1P,100e22.12)
  3001 format(100(e18.12,1x))
       return
       end
@@ -2809,7 +2823,7 @@ c     .                        dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
        end
 c-------------------------------------------------------------------------------------------------------      
       subroutine CalcSmatrix1D(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,
-     >                       Energy,RMatch,solution,deriv,Smatrix,Tmatrix,CrossSections)
+     >                       Energy,RMatch,solution,deriv,Smatrix,Tmatrix,CrossSections,Kmat)
       integer TotalAngMomentum
       integer NumOpenR,ipiv(NumOpenR)
       double precision leff(NumOpenR),Thresholds(NumOpenR),Mass,RMatch
@@ -2822,7 +2836,6 @@ c-------------------------------------------------------------------------------
       double precision ImatTemp(NumOpenR,NumOpenR)
       double precision Jmat(NumOpenR,NumOpenR)
       double precision Kmat(NumOpenR,NumOpenR)
-      double precision Kmat1D(NumOpenR,NumOpenR)
       double precision enorm(NumOpenR),x
       double precision Tmatrix(NumOpenR,NumOpenR),TmatrixAux(NumOpenR,NumOpenR),ImatAux(NumOpenR,NumOpenR)
       double complex Smatrix(NumOpenR,NumOpenR)
@@ -2912,7 +2925,7 @@ c     calculate T-matrix
        
 c i -> final state
 c j -> initial state
-       CrossSections = Kmat
+c       CrossSections = Kmat
 !       do i = 1,NumOpenR
 !          do j = 1,NumOpenR
 !     In 1D the elastic cross section is:
@@ -3475,3 +3488,93 @@ C     USES gammln
       call dgetri(N, A, N, ipiv, work, lwk, info)
       deallocate(ipiv,work)
       end
+
+      SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
+      implicit none
+      DOUBLE PRECISION grid(numpts)
+      DOUBLE PRECISION E1,E2,LE1,LE2,DE,LDE
+      INTEGER numpts, iE
+      CHARACTER(LEN=*), INTENT(IN) :: scale
+!--------------------------------------------
+! Linear grid:
+!--------------------------------------------
+      grid(1)=E1
+      IF((scale.EQ."linear").and.(numpts.gt.1)) THEN
+      DE=(E2-E1)/DBLE(numpts-1)
+      DO iE=1,numpts
+         grid(iE) = E1 + (iE-1)*DE
+      ENDDO
+      ENDIF
+!--------------------------------------------
+! Log grid:
+!--------------------------------------------
+      IF((scale.EQ."log").and.(numpts.gt.1)) THEN
+      LE1=dlog(E1)
+      LE2=dlog(E2)
+
+      LDE=(LE2-LE1)/DBLE(numpts-1d0)
+      DO iE=1,numpts
+        grid(iE) = dexp(LE1 + (iE-1)*LDE)
+        !        write(6,*) LE1, LE2, LDE, grid(iE)
+      ENDDO
+      ENDIF
+!--------------------------------------------
+! NegLog grid:  (use this for a log spacing of negative numbers)
+!--------------------------------------------
+       IF((scale.EQ."neglog").and.(numpts.gt.1)) THEN
+          LE1=dlog(-E2)
+          LE2=dlog(-E1)
+          
+          LDE=(LE2-LE1)/DBLE(numpts-1d0)
+          DO iE=1,numpts
+             grid(iE) = -dexp(LE2 - (iE-1)*LDE)
+!        write(6,*) iE, grid(iE)
+          ENDDO
+       ENDIF
+!--------------------------------------------
+! Quadratic grid:
+!--------------------------------------------
+       IF((scale.EQ."quadratic").and.(numpts.gt.1)) THEN
+          DE=(E2-E1)
+          DO iE=1,numpts
+             grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**2*DE
+          ENDDO
+       ENDIF
+!--------------------------------------------
+! Cubic grid:
+!--------------------------------------------
+       IF((scale.EQ."cubic").and.(numpts.gt.1)) THEN
+          DE=(E2-E1)
+          DO iE=1,numpts
+             grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**3*DE
+          ENDDO
+       ENDIF
+!--------------------------------------------
+! quartic grid:
+!--------------------------------------------
+       IF((scale.EQ."quartic").and.(numpts.gt.1)) THEN
+          DE=(E2-E1)
+          DO iE=1,numpts
+             grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**4*DE
+          ENDDO
+       ENDIF
+!--------------------------------------------
+! sqrroot grid:
+!--------------------------------------------
+       IF((scale.EQ."sqrroot").and.(numpts.gt.1)) THEN
+          DE=(E2-E1)
+          DO iE=1,numpts
+             grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**0.5d0*DE
+          ENDDO
+       ENDIF
+!--------------------------------------------
+! cuberoot grid:
+!--------------------------------------------
+       IF((scale.EQ."cuberoot").and.(numpts.gt.1)) THEN
+          DE=(E2-E1)
+          DO iE=1,numpts
+             grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**0.33333333333333333333333333333d0*DE
+          ENDDO
+       ENDIF
+       
+       END SUBROUTINE GridMaker

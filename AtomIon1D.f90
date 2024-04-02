@@ -1,183 +1,183 @@
 module BasisSets
-   implicit none
-TYPE basis
-   integer Left, Right, xDim
-   double precision, allocatable :: x(:,:),V(:,:),u(:,:,:), uxx(:,:,:)
-   double precision, allocatable :: S(:,:)
-   double precision, allocatable :: H(:,:)
-   double precision, allocatable :: D(:,:)
-   double precision, allocatable :: Psi(:,:),Energies(:,:)
-   double precision alpha, beta
-   integer, allocatable :: xBounds(:)
-END TYPE basis
+  implicit none
+  TYPE basis
+     integer Left, Right, xDim
+     double precision, allocatable :: x(:,:),V(:,:),u(:,:,:), uxx(:,:,:)
+     double precision, allocatable :: S(:,:)
+     double precision, allocatable :: H(:,:)
+     double precision, allocatable :: D(:,:)
+     double precision, allocatable :: Psi(:,:),Energies(:,:)
+     double precision alpha, beta
+     integer, allocatable :: xBounds(:)
+  END TYPE basis
 contains
-   subroutine AllocateBasis(T,Left, Right,Order, LegPoints, xNumPoints,NumStates)
-      implicit none
-      integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv
-      TYPE(basis) T
-      T%Left = Left
-      T%Right = Right
-      T%xDim = xNumPoints+Order-3
-      if (Left .eq. 2) T%xDim = T%xDim + 1
-      if (Right .eq. 2) T%xDim = T%xDim + 1
-      MatrixDim = T%xDim
-      ncv = 2*NumStates
-      allocate(T%x(LegPoints, xNumPoints))
-      allocate(T%V(LegPoints, xNumPoints))
-      allocate(T%u(LegPoints, xNumPoints, T%xDim))
-      allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
-      allocate(T%xBounds(xNumPoints+2*Order))
-      allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim),T%D(Order+1,T%xDim))
-      allocate(T%Psi(MatrixDim,ncv))
-      allocate(T%Energies(ncv,2))
-   
-   end subroutine AllocateBasis
-   subroutine deAllocateBasis(T)
-      implicit none
-      TYPE(basis) T
-      deallocate(T%x)
-      deallocate(T%V)
-      deallocate(T%u)
-      deallocate(T%uxx)
-      deallocate(T%xBounds)
-      deallocate(T%S)
-      deallocate(T%H)
-      deallocate(T%D)
-      deallocate(T%Psi)
-      deallocate(T%Energies)
-  
-   end subroutine deAllocateBasis
- end module BasisSets
- 
+  subroutine AllocateBasis(T,Left, Right,Order, LegPoints, xNumPoints,NumStates)
+    implicit none
+    integer Left, Right, LegPoints, xNumPoints, Order, MatrixDim, NumStates, ncv
+    TYPE(basis) T
+    T%Left = Left
+    T%Right = Right
+    T%xDim = xNumPoints+Order-3
+    if (Left .eq. 2) T%xDim = T%xDim + 1
+    if (Right .eq. 2) T%xDim = T%xDim + 1
+    MatrixDim = T%xDim
+    ncv = 2*NumStates
+    allocate(T%x(LegPoints, xNumPoints))
+    allocate(T%V(LegPoints, xNumPoints))
+    allocate(T%u(LegPoints, xNumPoints, T%xDim))
+    allocate(T%uxx(LegPoints,xNumPoints,T%xDim))
+    allocate(T%xBounds(xNumPoints+2*Order))
+    allocate(T%S(Order+1,T%xDim),T%H(Order+1,T%xDim),T%D(Order+1,T%xDim))
+    allocate(T%Psi(MatrixDim,ncv))
+    allocate(T%Energies(ncv,2))
+
+  end subroutine AllocateBasis
+  subroutine deAllocateBasis(T)
+    implicit none
+    TYPE(basis) T
+    deallocate(T%x)
+    deallocate(T%V)
+    deallocate(T%u)
+    deallocate(T%uxx)
+    deallocate(T%xBounds)
+    deallocate(T%S)
+    deallocate(T%H)
+    deallocate(T%D)
+    deallocate(T%Psi)
+    deallocate(T%Energies)
+
+  end subroutine deAllocateBasis
+end module BasisSets
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 program AtomIon1D
-   use BasisSets
-   implicit none
-   TYPE(basis) PB
-   TYPE(basis) CB
-   TYPE(basis) LB
-   TYPE(basis) RB
-   TYPE(basis) CB_old
-   double precision tmp, tmp1, tmp2, S_ij
-   integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
-   integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
-   integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
-   double precision alpha,tmp_alpha,tmp_beta,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
-   double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
-   double precision, allocatable :: R(:),Perm(:,:),ComposedPerm(:,:),AbsPerm(:,:)
-   double precision, allocatable :: xPoints(:)
-   double precision, allocatable :: AllEnergies(:,:), AllPsis(:,:,:)
-   
-   REAL t1, t2
+  use BasisSets
+  implicit none
+  TYPE(basis) PB
+  TYPE(basis) CB
+  TYPE(basis) LB
+  TYPE(basis) RB
+  TYPE(basis) CB_old
+  double precision tmp, tmp1, tmp2, S_ij
+  integer max_state, LegPoints,xNumPoints, newRow, max_state1, max_state2, last_overlaps(2), curr_overlaps(2)
+  integer mu1, nu1, pqflag, double, lastdouble1, lastdouble2
+  integer NumStates,PsiFlag,Order,Left,Right, RSteps,CouplingFlag, CrossingFlag
+  double precision alpha,tmp_alpha,tmp_beta,Shift,Shift2,NumStateInc,mi,ma,theta_c,mgamma
+  double precision RLeft,RRight,RDerivDelt,DD,L,RFirst,RLast,XFirst,XLast,StepX,StepR, xMin,xMax
+  double precision, allocatable :: R(:),Perm(:,:),ComposedPerm(:,:),AbsPerm(:,:)
+  double precision, allocatable :: xPoints(:)
+  double precision, allocatable :: AllEnergies(:,:), AllPsis(:,:,:)
 
-   logical, allocatable :: LSelect(:)
+  REAL t1, t2
 
-   integer swapstate,iparam(11),ncv,info,troubleshooting
-   integer i,j,k,iR,NumFirst,NumBound
-   integer LeadDim,MatrixDim,HalfBandWidth
-   integer xDim, Nbs, NumOutputChannels
-   integer, allocatable :: iwork(:), WriteChannels(:)
-   double precision Tol,RChange
-   double precision TotalMemory
-   double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
-   double precision YVal_L,RVal_L, RVal_R
+  logical, allocatable :: LSelect(:)
 
-   double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
-   double precision, allocatable :: LUFac(:,:),workl(:)
-   double precision, allocatable :: workd(:),Residuals(:)
-   double precision, allocatable :: xLeg(:),wLeg(:)
-   double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
-   double precision, allocatable :: P(:,:),QTil(:,:),dP(:,:), testmat(:,:),SPsi(:)
-   double precision ur(1:50000),acoef,bcoef,diff
-   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
-   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
-   double precision, external :: ddot, kdelta
-   character*64 LegendreFile
-   character*64 leftnrg
-   common /Rvalue/ Rvalue      
-   hbar = 1.054571817d-34
-   amu = 1.660539d-27
-   !     read in number of energies and states to print
-   read(5,*)
-   read(5,*) NumStates,PsiFlag,CouplingFlag, troubleshooting
-   write(6,*) NumStates,PsiFlag,CouplingFlag, troubleshooting
+  integer swapstate,iparam(11),ncv,info,troubleshooting
+  integer i,j,k,iR,NumFirst,NumBound
+  integer LeadDim,MatrixDim,HalfBandWidth
+  integer xDim, Nbs, NumOutputChannels
+  integer, allocatable :: iwork(:), WriteChannels(:)
+  double precision Tol,RChange
+  double precision TotalMemory
+  double precision mu, mu12, mu123, r0diatom, dDiatom, etaOVERpi, Pi
+  double precision YVal_L,RVal_L, RVal_R
 
-   !     read in Gauss-Legendre info
-   read(5,*)
-   read(5,*)
-   read(5,1002) LegendreFile
-   write(6,1002) LegendreFile
-   read(5,*)
-   read(5,*)
-   read(5,*) LegPoints
-   write(6,*) LegPoints,' LegPoints'
+  double precision, allocatable :: oldPsi(:,:), oldEnergies(:,:)
+  double precision, allocatable :: LUFac(:,:),workl(:)
+  double precision, allocatable :: workd(:),Residuals(:)
+  double precision, allocatable :: xLeg(:),wLeg(:)
+  double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
+  double precision, allocatable :: P(:,:,:),QTil(:,:,:),dP(:,:), testmat(:,:),SPsi(:)
+  double precision ur(1:50000),acoef,bcoef,diff
+  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
+  double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
+  double precision, external :: ddot, kdelta
+  character*64 LegendreFile
+  character*64 leftnrg
+  common /Rvalue/ Rvalue      
+  hbar = 1.054571817d-34
+  amu = 1.660539d-27
+  !     read in number of energies and states to print
+  read(5,*)
+  read(5,*) NumStates,PsiFlag,CouplingFlag, troubleshooting
+  write(6,*) NumStates,PsiFlag,CouplingFlag, troubleshooting
 
-   ! read in boundary conditions
-   read(5,*)
-   read(5,*)
-   read(5,*) Shift,Shift2,Order,Left,Right
-   print*, 'Shift,Shift2, Order, Left, Right'
-   print*, Shift,Shift2,Order,Left,Right
+  !     read in Gauss-Legendre info
+  read(5,*)
+  read(5,*)
+  read(5,1002) LegendreFile
+  write(6,1002) LegendreFile
+  read(5,*)
+  read(5,*)
+  read(5,*) LegPoints
+  write(6,*) LegPoints,' LegPoints'
 
-   ! read in potential parameters
-   read(5,*)
-   read(5,*)
-   read(5,*) alpha,mi,ma,DD,L
-   write(6,*) alpha,mi,ma,DD,L
-   mi = mi*amu
-   ma = ma*amu
+  ! read in boundary conditions
+  read(5,*)
+  read(5,*)
+  read(5,*) Shift,Shift2,Order,Left,Right
+  print*, 'Shift,Shift2, Order, Left, Right'
+  print*, Shift,Shift2,Order,Left,Right
 
-   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
-   mu=dsqrt(ma/mi)
-   Pi=dacos(-1.d0)
-   write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
-   mgamma = mu
-   theta_c = datan(mgamma)     ! same as Seth's beta !!! arctan mu, d?atan
-   write(6,*) "theta_c = ", theta_c
+  ! read in potential parameters
+  read(5,*)
+  read(5,*)
+  read(5,*) alpha,mi,ma,DD,L
+  write(6,*) alpha,mi,ma,DD,L
+  mi = mi*amu
+  ma = ma*amu
 
-   ! read in grid information
-   read(5,*)
-   read(5,*)
-   read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol
-   write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol
+  mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass
+  mu=dsqrt(ma/mi)
+  Pi=dacos(-1.d0)
+  write(6,*) 'mi = ', mi, 'ma = ', ma, 'mu12 = ', mu12, 'mu = ', mu
+  mgamma = mu
+  theta_c = datan(mgamma)     ! same as Seth's beta !!! arctan mu, d?atan
+  write(6,*) "theta_c = ", theta_c
 
-   omega = 2d0*Pi*omega
-   lho = dsqrt(hbar/mi/omega)
-   Rstar = dsqrt(2*mu12*C4/hbar**2)
-   C4 = C4/(hbar*omega*lho**4)
-   sNb = 1.d0/(dble(Nbs+1)*Pi + phi) !We use Nbs+1 here since the scattering length (and therefore phi=1/a) is negative. 
-   
-   write(6,*) "lho = ", lho
-   write(6,*) "C4 = ", C4
-   write(6,*) "Rstar = ", Rstar
-   write(6,*) "sNb = ", sNb
+  ! read in grid information
+  read(5,*)
+  read(5,*)
+  read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol
+  write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol
 
-   ! Re-define in oscillator units
-   ma = ma/mi
-   mi = 1d0
-   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass (mu remains unchanged)
-   
-   read(5,*)
-   read(5,*)
-   read(5,*) RSteps,RDerivDelt,RFirst,RLast
-   write(6,*) RSteps,RDerivDelt,RFirst,RLast
-   read(5,*)
-   read(5,*)
-   read(5,*) NumOutputChannels
-   write(6,*) "NumOutputChannels = ", NumOutputChannels
-   allocate(WriteChannels(NumOutputChannels))
-   read(5,*)
-   read(5,*)
-   read(5,*) WriteChannels!(WriteChannels(i), i = 1, NumOutputChannels)
+  omega = 2d0*Pi*omega
+  lho = dsqrt(hbar/mi/omega)
+  Rstar = dsqrt(2*mu12*C4/hbar**2)
+  C4 = C4/(hbar*omega*lho**4)
+  sNb = 1.d0/(dble(Nbs+1)*Pi + phi) !We use Nbs+1 here since the scattering length (and therefore phi=1/a) is negative. 
 
-  
+  write(6,*) "lho = ", lho
+  write(6,*) "C4 = ", C4
+  write(6,*) "Rstar = ", Rstar
+  write(6,*) "sNb = ", sNb
+
+  ! Re-define in oscillator units
+  ma = ma/mi
+  mi = 1d0
+  mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass (mu remains unchanged)
+
+  read(5,*)
+  read(5,*)
+  read(5,*) RSteps,RDerivDelt,RFirst,RLast
+  write(6,*) RSteps,RDerivDelt,RFirst,RLast
+  read(5,*)
+  read(5,*)
+  read(5,*) NumOutputChannels
+  write(6,*) "NumOutputChannels = ", NumOutputChannels
+  allocate(WriteChannels(NumOutputChannels))
+  read(5,*)
+  read(5,*)
+  read(5,*) WriteChannels!(WriteChannels(i), i = 1, NumOutputChannels)
+
+
   allocate(R(RSteps))
   StepR = (RLast-RFirst)/(dble(RSteps-1))
   do i = 1,RSteps
      !     read(5,*) R(i)
      !     R(i)= (XFirst+(i-1)*StepX)**3 ! Cubic Grid
      R(i) = (RFirst+(i-1)*StepR) !Linear Grid
- !    R(i) = 10.d0**(XFirst+(i-1)*StepX) ! Log Grid
+     !    R(i) = 10.d0**(XFirst+(i-1)*StepX) ! Log Grid
   enddo
 
   allocate(xLeg(LegPoints),wLeg(LegPoints))
@@ -205,13 +205,13 @@ program AtomIon1D
   write(6,*)
 
   allocate(xPoints(xNumPoints))
-!  allocate(xBounds(xNumPoints+2*Order))
-  allocate(P(NumStates,NumStates),QTil(NumStates,NumStates),dP(NumStates,NumStates))
+  !  allocate(xBounds(xNumPoints+2*Order))
+  allocate(P(NumStates,NumStates,RSteps),QTil(NumStates,NumStates,RSteps))
 
   ncv = 2*NumStates
   LeadDim = 3*HalfBandWidth+1
   allocate(OldPsi(MatrixDim,ncv),NewPsi(MatrixDim,ncv),SPsi(MatrixDim))
-!  allocate(TransEnergies(2,ncv),TransPsi(ncv,MatrixDim))
+  !  allocate(TransEnergies(2,ncv),TransPsi(ncv,MatrixDim))
   allocate(OldEnergies(ncv,2),TempEnergies(ncv,2))
   allocate(AllEnergies(NumStates,RSteps))
   allocate(AllPsis(NumStates,MatrixDim,RSteps))  ! Note that this is storing eigenvectors in the ROWS instead of collumns.
@@ -222,137 +222,144 @@ program AtomIon1D
   allocate(workl(ncv*ncv+8*ncv))
   allocate(workd(3*MatrixDim))
   allocate(Residuals(MatrixDim))
-  
+
   info = 0
   iR=1
   Tol=1e-20
 
   NumBound=0
-  
+
   call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates)
   call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates)
- 
-   open(unit = 203, file = "AdiabaticEnergies.dat") 
-   open(unit = 200, file = "DiabaticEnergies.dat") 
-   open(unit = 101, file = "P_Matrix.dat")
-   open(unit = 102, file = "QTil_Matrix.dat")
-   open(unit = 103, file = "QuickPMat.dat")
-   open(unit = 104, file = "QuickQTilMat.dat")
-   open(unit = 105, file = "VQmat.dat")
 
-   allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
-   
-   CB%Left = Left
-   CB%Right = Right
-   RChange=100.d0
-   write(200,*) "#", RSteps, NumOutputChannels
-   do iR = RSteps,1,-1 
-      call CPU_TIME(t1)
-      NumFirst=NumStates
-      if (R(iR).gt.RChange) then
-         NumFirst=NumBound
-      endif
-      NumStateInc=NumStates-NumFirst
-      
-      xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
-      xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
-      
-      sbc = (lho/Rstar)*R(iR)*dsqrt((1d0 + mu**2)/mu)*SIN(xMin - theta_c)
-      !print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
-      if(xMax.le.xMin) then
-         write(6,*) "minimum hyperradius too small."
-         stop
-      endif
-      call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
-      !******** CONSTRUCTION OF BASIS SETS ********
-      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
-      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
-      call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
-         LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB)
-      call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
-           NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
-      call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
-      NewPsi = CB%Psi
-      
-      AllPsis(:,:,iR) = Transpose(CB%Psi(:,1:NumStates))
-      AllEnergies(:,iR) = CB%Energies(1:NumStates,1)
-      
-      call CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,CB%S,Perm,ncv,Dtol)
-      if(iR.eq.RSteps) then
-         Perm = 0d0
-         do i = 1,NumStates
-            Perm(i,i) = 1d0
-         enddo
-         ComposedPerm = Perm
-      endif
-      
-      ! Construct the composed permutation operator and permute the eigenvectors and eigenvalues
-      ComposedPerm = matmul(ComposedPerm,Perm)
-      AllPsis(:,:,iR) = matmul(ComposedPerm,AllPsis(:,:,iR))
-      AllEnergies(:,iR) = matmul(ComposedPerm,AllEnergies(:,iR))
+  open(unit = 203, file = "AdiabaticEnergies.dat") 
+  open(unit = 200, file = "DiabaticEnergies.dat") 
+  open(unit = 101, file = "Pmat.dat")
+  open(unit = 102, file = "QTilmat.dat")
+  open(unit = 103, file = "QuickPMat.dat")
+  open(unit = 104, file = "QuickEffV.dat")
+  open(unit = 105, file = "VQmat.dat")
 
-      NewPsi = 0d0
-      NewPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR))
+  allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
 
-      !--- Check the phase consistency of NewPsi, and fix phases ------
-      if(iR.lt.RSteps) then
-         OldPsi = 0d0
-         OldPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR+1))
-         do j = 1,NumStates
-            call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,CB%S,HalfBandWidth+1,OldPsi(:,j),1,0.0d0,SPsi,1)  ! Calculate the vector S*OldPsi and store in SPsi            
-            testorth=ddot(MatrixDim,NewPsi(:,j),1,SPsi,1)            
-            if(testorth.lt.0d0) then
-               NewPsi(:,j) = -NewPsi(:,j)
-               AllPsis(j,:,iR) = -AllPsis(j,:,iR)
-            endif
-         enddo
-         
-      endif
-      !--------------------------------------------
-      
-      write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) ! writing undiabatized energies
+  CB%Left = Left
+  CB%Right = Right
+  RChange=100.d0
+  write(200,*) "#", RSteps, NumOutputChannels
+  do iR = RSteps,1,-1 
+     call CPU_TIME(t1)
+     NumFirst=NumStates
+     if (R(iR).gt.RChange) then
+        NumFirst=NumBound
+     endif
+     NumStateInc=NumStates-NumFirst
 
-      !-------- Couplings from the diabatized eigenstates -------------!
-      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P,QTil,ncv)      
-      write(200,20) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies      
-      write(101,*) R(iR)
-      write(102,*) R(iR)
-      write(105,*) R(iR)
-      do i=1,NumOutputChannels
-         write(101,*) (P(WriteChannels(i),WriteChannels(j)), j=1,NumOutputChannels)
-         write(102,*) (QTil(WriteChannels(i),WriteChannels(j)), j=1,NumOutputChannels)
-         write(105,*) ( (AllEnergies(WriteChannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) )*kdelta(i,j) &
-              +  QTil(WriteChannels(i),WriteChannels(j))/(2d0*mu), j = 1, NumOutputChannels)
-      enddo
-      write(103,*) R(iR),(P(WriteChannels(1),WriteChannels(i))*R(iR),i=1,NumOutputChannels)
-      write(104,*) R(iR),(QTil(WriteChannels(i),WriteChannels(i))*R(iR)**2,i=1,NumOutputChannels)
+     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
+     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
 
-      !write(104,*) R(iR), (QTil(i,i)*R(iR)**2, i=1,1)
-      !write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
-      !--------------------------------------------------------------------------!
-      OldPsi = CB%Psi
-!    Adjusting Shift
+     sbc = (lho/Rstar)*R(iR)*dsqrt((1d0 + mu**2)/mu)*SIN(xMin - theta_c)
+     !print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
+     if(xMax.le.xMin) then
+        write(6,*) "minimum hyperradius too small."
+        stop
+     endif
+     call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
+     !******** CONSTRUCTION OF BASIS SETS ********
+     call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
+     call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
+     call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
+          LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB)
+     call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
+          NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
+     call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
+     NewPsi = CB%Psi
+
+     AllPsis(:,:,iR) = Transpose(CB%Psi(:,1:NumStates))
+     AllEnergies(:,iR) = CB%Energies(1:NumStates,1)
+
+     call CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,CB%S,Perm,ncv,Dtol)
+     if(iR.eq.RSteps) then
+        Perm = 0d0
+        do i = 1,NumStates
+           Perm(i,i) = 1d0
+        enddo
+        ComposedPerm = Perm
+     endif
+
+     ! Construct the composed permutation operator and permute the eigenvectors and eigenvalues
+     ComposedPerm = matmul(ComposedPerm,Perm)
+     AllPsis(:,:,iR) = matmul(ComposedPerm,AllPsis(:,:,iR))
+     AllEnergies(:,iR) = matmul(ComposedPerm,AllEnergies(:,iR))
+
+     NewPsi = 0d0
+     NewPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR))
+
+     !--- Check the phase consistency of NewPsi, and fix phases ------
+     if(iR.lt.RSteps) then
+        OldPsi = 0d0
+        OldPsi(:,1:NumStates) = Transpose(AllPsis(:,:,iR+1))
+        do j = 1,NumStates
+           call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,CB%S,HalfBandWidth+1,OldPsi(:,j),1,0.0d0,SPsi,1)  ! Calculate the vector S*OldPsi and store in SPsi            
+           testorth=ddot(MatrixDim,NewPsi(:,j),1,SPsi,1)            
+           if(testorth.lt.0d0) then
+              NewPsi(:,j) = -NewPsi(:,j)
+              AllPsis(j,:,iR) = -AllPsis(j,:,iR)
+           endif
+        enddo
+
+     endif
+     !--------------------------------------------
+
+     write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) ! writing undiabatized energies
+
+     !-------- Couplings from the diabatized eigenstates -------------!
+     call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P(:,:,iR),QTil(:,:,iR),ncv)      
+
+     write(103,*) R(iR),(P(WriteChannels(1),WriteChannels(i),iR),i=1,NumOutputChannels)
+     write(104,*) R(iR),(AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
+          + QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu),i=1,NumOutputChannels)
+
+     !write(104,*) R(iR), (QTil(i,i,iR)*R(iR)**2, i=1,1)
+     !write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
+     !--------------------------------------------------------------------------!
+     OldPsi = CB%Psi
+     !    Adjusting Shift
      ur(iR) = CB%Energies(1,1)
      Shift = -200d0
      if(ur(iR).lt.0d0) then
         Shift = ur(iR)*10d0
      endif
 
-   call CPU_TIME(t2)
-   write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
+     call CPU_TIME(t2)
+     write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
 
   enddo
 
-   close(11)
-   close(101)
-   close(102)
-   close(103)
-   close(104)
-   close(105)
-   close(200)
-   close(300)
-   close(301)
-   !100 close(203)
+  do iR = 1, RSteps
+     write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies      
+     write(101,11) R(iR)
+     write(102,11) R(iR)
+!     write(104,11) R(iR), (AllEnergies(WriteChannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
+!          +  QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i = 1, NumOutPutChannels)
+     write(105,11) R(iR)
+     do i=1,NumOutputChannels
+        write(101,11) (P(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels)
+        write(102,11) (QTil(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels)
+        write(105,11) ((AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2))*kdelta(i,j) &
+             + QTil(WriteChannels(i),WriteChannels(j),iR)/(2d0*mu), j=1,NumOutputChannels)
+     enddo
+  enddo
+  
+  close(11)
+  close(101)
+  close(102)
+  close(103)
+  close(104)
+  close(105)
+  close(200)
+  close(300)
+  close(301)
+  !100 close(203)
 
   deallocate(iwork)
   deallocate(LSelect)
@@ -360,16 +367,17 @@ program AtomIon1D
   deallocate(workl)
   deallocate(workd)
   deallocate(Residuals)
-  deallocate(P,QTil,dP)
+  deallocate(P,QTil)
   deallocate(xPoints)
   deallocate(xLeg,wLeg)
 
   call deAllocateBasis(CB)
 
-  
+
   deallocate(R)
 
 10 format(1P,100e25.15)
+11 format(1P,100e22.12)
 20 format(1P,100e16.8)
 1002 format(a64)
 
@@ -388,7 +396,7 @@ subroutine CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,S,Per
   integer i,j,k,n,m
   double precision, external :: ddot 
   double precision, allocatable :: TempPsi(:,:),SPsi(:)
-  
+
   allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim))
 
   TempPsi = OldPsi
@@ -401,7 +409,7 @@ subroutine CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,S,Per
         !write(6,*) n,m, '   testorth=',testorth
         if (abs(abs(testorth)-1d0).lt.tol) then
            Perm(m,n) = 1d0
-!           write(6,*) m,n
+           !           write(6,*) m,n
         else if(abs(testorth).lt.tol) then           
            Perm(m,n) = 0d0
         else
@@ -410,385 +418,385 @@ subroutine CalcPermutation(NumStates,HalfBandWidth,MatrixDim,OldPsi,NewPsi,S,Per
         Perm(n,m) = Perm(m,n)
      enddo
   enddo
-  
+
   if((Perm(NumStates,NumStates).eq.0d0).and.(Perm(NumStates-1,NumStates-1).eq.1d0)) then
      Perm(NumStates,NumStates)=1d0
   endif
-  
+
   deallocate(TempPsi,SPsi)
-  
+
 end subroutine CalcPermutation
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !Computes the couplings using the Feynman-Hellmann theorem
-    ! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix Psi.  
-    subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,ncv)
-      implicit none
-      integer NumStates,HalfBandWidth,MatrixDim,ncv
-      double precision Psi(MatrixDim,ncv),U(NumStates,2)
-      double precision S(HalfBandWidth+1,MatrixDim),D(HalfBandWidth+1,MatrixDim),testorth
-      double precision P(NumStates,NumStates),QTil(NumStates,NumStates)
-      double precision aP
-      integer i,j,k,n,m
-      double precision, external :: ddot 
-      double precision, allocatable :: TempPsi(:,:),SPsi(:), DPsi(:)
+!Computes the couplings using the Feynman-Hellmann theorem
+! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix Psi.  
+subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,ncv)
+  implicit none
+  integer NumStates,HalfBandWidth,MatrixDim,ncv
+  double precision Psi(MatrixDim,ncv),U(NumStates,2)
+  double precision S(HalfBandWidth+1,MatrixDim),D(HalfBandWidth+1,MatrixDim),testorth
+  double precision P(NumStates,NumStates),QTil(NumStates,NumStates)
+  double precision aP
+  integer i,j,k,n,m
+  double precision, external :: ddot 
+  double precision, allocatable :: TempPsi(:,:),SPsi(:), DPsi(:)
 
-      allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim),DPsi(MatrixDim))
-    
-      TempPsi = Psi
-      P=0d0
-      do m = 1,NumStates
-         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,D,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,DPsi,1)   ! Calculate the vector D*Psi(m) and store in DPsi
-         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*Psi(m) and store in SPsi 
-         do n = m+1,NumStates
-            testorth=ddot(MatrixDim,TempPsi(:,n),1,SPsi,1)
-            !write(6,*) n,m, '   testorth=',testorth
-            aP = 1d0/(U(m,1) - U(n,1))
-            P(n,m) = aP*ddot(MatrixDim,TempPsi(:,n),1,DPsi,1)
-            P(m,n) = -P(n,m)
-         enddo
-      enddo
-      QTil = -matmul(P,P) 
+  allocate(TempPsi(MatrixDim,ncv),SPsi(MatrixDim),DPsi(MatrixDim))
+
+  TempPsi = Psi
+  P=0d0
+  do m = 1,NumStates
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,D,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,DPsi,1)   ! Calculate the vector D*Psi(m) and store in DPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*Psi(m) and store in SPsi 
+     do n = m+1,NumStates
+        testorth=ddot(MatrixDim,TempPsi(:,n),1,SPsi,1)
+        !write(6,*) n,m, '   testorth=',testorth
+        aP = 1d0/(U(m,1) - U(n,1))
+        P(n,m) = aP*ddot(MatrixDim,TempPsi(:,n),1,DPsi,1)
+        P(m,n) = -P(n,m)
+     enddo
+  enddo
+  QTil = -matmul(P,P) 
 !!$      do i = 1, NumStates
 !!$         do j = 1, NumStates
 !!$            write(6,*) i,j,QTil(i,j)
 !!$         enddo
 !!$      enddo
-      deallocate(TempPsi,SPsi,DPsi)
+  deallocate(TempPsi,SPsi,DPsi)
 
-      return
-      end
+  return
+end subroutine CalcCoupling_FH
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
-      implicit none
-      integer NumStates,HalfBandWidth,MatrixDim
-      double precision RDelt
-      double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
-      double precision S(HalfBandWidth+1,MatrixDim),testorth
-      double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
+subroutine CalcCoupling(NumStates,HalfBandWidth,MatrixDim,RDelt,lPsi,mPsi,rPsi,S,P,Q,dP)
+  implicit none
+  integer NumStates,HalfBandWidth,MatrixDim
+  double precision RDelt
+  double precision lPsi(MatrixDim,NumStates),mPsi(MatrixDim,NumStates),rPsi(MatrixDim,NumStates)
+  double precision S(HalfBandWidth+1,MatrixDim),testorth
+  double precision P(NumStates,NumStates),Q(NumStates,NumStates),dP(NumStates,NumStates)
 
-      integer i,j,k
-      double precision aP,aQ,ddot
-      double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
-      double precision, allocatable :: TempmPsi(:)
+  integer i,j,k
+  double precision aP,aQ,ddot
+  double precision, allocatable :: lDiffPsi(:),rDiffPsi(:),TempPsi(:),TempPsiB(:),rSumPsi(:)
+  double precision, allocatable :: TempmPsi(:)
 
-      allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
-      TempPsiB(MatrixDim),rSumPsi(MatrixDim))
-      allocate(TempmPsi(MatrixDim))
+  allocate(lDiffPsi(MatrixDim),rDiffPsi(MatrixDim),TempPsi(MatrixDim),&
+       TempPsiB(MatrixDim),rSumPsi(MatrixDim))
+  allocate(TempmPsi(MatrixDim))
 
-      aP = 0.5d0/RDelt
-      aQ = aP*aP
+  aP = 0.5d0/RDelt
+  aQ = aP*aP
 
-      do j = 1,NumStates
-         do k = 1,MatrixDim
-            rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
-            rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)
-!            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
-!            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
-         enddo
-         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
-         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
-         call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
+  do j = 1,NumStates
+     do k = 1,MatrixDim
+        rDiffPsi(k) = rPsi(k,j)-lPsi(k,j)
+        rSumPsi(k)  = lPsi(k,j)+mPsi(k,j)+rPsi(k,j)
+        !            rSumPsi(k)  = lPsi(k,j)-2.0d0*mPsi(k,j)+rPsi(k,j)
+        !            rSumPsi(k)  = lPsi(k,j)+rPsi(k,j)
+     enddo
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rDiffPsi,1,0.0d0,TempPsi,1)   ! Calculate the vector S*rDiffPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,rSumPsi,1,0.0d0,TempPsiB,1)   ! Calculate the vector S*rSumPsi
+     call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,mPsi(1,j),1,0.0d0,TempmPsi,1) ! Calculate the vector S*mPsi(1,j)
 
-         do i = 1,NumStates
+     do i = 1,NumStates
 
-!            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
-!            write(309,*) i,j, '   testorth=',testorth
+        !            testorth=ddot(MatrixDim,mPsi(1,i),1,TempmPsi,1)
+        !            write(309,*) i,j, '   testorth=',testorth
 
-            P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1)
-            dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
+        P(i,j) = aP*ddot(MatrixDim,mPsi(1,i),1,TempPsi,1)
+        dP(i,j)= ddot(MatrixDim,mPsi(1,i),1,TempPsiB,1)
 
-            do k = 1,MatrixDim
-               lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
-            enddo
-            Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1)
-         enddo
-      enddo
+        do k = 1,MatrixDim
+           lDiffPsi(k) = rPsi(k,i)-lPsi(k,i)
+        enddo
+        Q(i,j) = -aQ*ddot(MatrixDim,lDiffPsi,1,TempPsi,1)
+     enddo
+  enddo
 
-      do j=1,NumStates
-	 do i=j,NumStates
-            dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
-            dP(j,i)=-dP(i,j)
-	 enddo
-      enddo
+  do j=1,NumStates
+     do i=j,NumStates
+        dP(i,j)=2.d0*aQ*(dP(i,j)-dP(j,i))
+        dP(j,i)=-dP(i,j)
+     enddo
+  enddo
 
-      deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
+  deallocate(lDiffPsi,rDiffPsi,TempPsi,rSumPsi,TempPsiB,TempmPsi)
 
-      return
-      end
+  return
+end subroutine CalcCoupling
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 !!!!!!!!!!!!!!!!!!!!!! (LB, CB, RB, P, Q, PB%S, HalfBandWidth, NumStates, RDerivDelt)
 
 subroutine calc_Physical_Set(b, pb,RVal_L,RVal_R,Order, xNumPoints, xPoints)
-use BasisSets
-implicit none
-double precision, external :: calc_alpha, calc_beta
-integer Order, xNumPoints
-double precision RVal_L, RVal_R, xPoints(xNumPoints)
-TYPE(basis) b, pb
-!!REVISIT FOR cases other than L,R = 3,3
+  use BasisSets
+  implicit none
+  double precision, external :: calc_alpha, calc_beta
+  integer Order, xNumPoints
+  double precision RVal_L, RVal_R, xPoints(xNumPoints)
+  TYPE(basis) b, pb
+  !!REVISIT FOR cases other than L,R = 3,3
 
-b%alpha = calc_alpha(b, RVal_L, Order, xNumPoints, xPoints)
-b%beta = calc_beta(b, RVal_R, Order, xNumPoints, xPoints)
+  b%alpha = calc_alpha(b, RVal_L, Order, xNumPoints, xPoints)
+  b%beta = calc_beta(b, RVal_R, Order, xNumPoints, xPoints)
 
-b%u(:,:,1) = b%alpha*pb%u(:,:,1)+pb%u(:,:,2)
-b%uxx(:,:,1) = b%alpha*pb%uxx(:,:,1)+pb%uxx(:,:,2)
+  b%u(:,:,1) = b%alpha*pb%u(:,:,1)+pb%u(:,:,2)
+  b%uxx(:,:,1) = b%alpha*pb%uxx(:,:,1)+pb%uxx(:,:,2)
 
-b%u(:,:,b%xDim) = pb%u(:,:,pb%xDim-1)+b%beta*pb%u(:,:,pb%xDim)
-b%uxx(:,:,b%xDim) = pb%uxx(:,:,pb%xDim-1)+b%beta*pb%uxx(:,:,pb%xDim)
+  b%u(:,:,b%xDim) = pb%u(:,:,pb%xDim-1)+b%beta*pb%u(:,:,pb%xDim)
+  b%uxx(:,:,b%xDim) = pb%uxx(:,:,pb%xDim-1)+b%beta*pb%uxx(:,:,pb%xDim)
 
-b%u(:,:,2:b%xDim-1) = pb%u(:,:,3:pb%xDim-2)
-b%uxx(:,:,2:b%xDim-1) = pb%uxx(:,:,3:pb%xDim-2)
+  b%u(:,:,2:b%xDim-1) = pb%u(:,:,3:pb%xDim-2)
+  b%uxx(:,:,2:b%xDim-1) = pb%uxx(:,:,3:pb%xDim-2)
 
 end subroutine calc_Physical_Set
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 double precision function calc_alpha(B, RVal_L, Order, xNumPoints, xPoints)
-use BasisSets
-implicit none
-TYPE(basis) B
-integer Order, xNumPoints
-double precision RVal_L,xPoints(xNumPoints)
-double precision, external :: MYBSpline
+  use BasisSets
+  implicit none
+  TYPE(basis) B
+  integer Order, xNumPoints
+  double precision RVal_L,xPoints(xNumPoints)
+  double precision, external :: MYBSpline
 
-calc_alpha = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))*RVal_L&
-- MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)))&
-/(MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))&
--MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1))*RVal_L)
+  calc_alpha = (MYBSpline(Order,1,xNumPoints,xPoints,2,xPoints(1))*RVal_L&
+       - MYBSpline(Order,0,xNumPoints,xPoints,2,xPoints(1)))&
+       /(MYBSpline(Order,0,xNumPoints,xPoints,1,xPoints(1))&
+       -MYBSpline(Order,1,xNumPoints,xPoints,1,xPoints(1))*RVal_L)
 
 end function calc_alpha
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 double precision function calc_beta(B, RVal_R, Order, xNumPoints, xPoints)
-use BasisSets
-implicit none
-TYPE(basis) B
-integer Order, xNumPoints
-double precision RVal_R, xPoints(xNumPoints)
-double precision, external :: MYBSpline
+  use BasisSets
+  implicit none
+  TYPE(basis) B
+  integer Order, xNumPoints
+  double precision RVal_R, xPoints(xNumPoints)
+  double precision, external :: MYBSpline
 
-calc_beta = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*RVal_R&
--MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)))&
-/(MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))&
-- MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*RVal_R)
+  calc_beta = (MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints))*RVal_R&
+       -MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-2,xPoints(xNumPoints)))&
+       /(MYBSpline(Order,0,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))&
+       - MYBSpline(Order,1,xNumPoints,xPoints,xNumPoints+Order-1,xPoints(xNumPoints))*RVal_R)
 
 end function calc_beta
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 subroutine calcCouplings_v2(LB, CB, RB, P, Q, S_prim, HalfBandWidth, NumStates, RDerivDelt)
-use BasisSets
-implicit none
-TYPE(basis) LB, CB, RB
-double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
-integer HalfBandWidth, NumStates
-integer ct, mu, nu, N_
-double precision P_term_1, Q_term_1, Q_term_2
-N_ = CB%xDim+2
-!print*, 'Calculating P matrix...'
-do mu = 1, NumStates
-   do nu = 1, NumStates
-      P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-      P(mu,nu) = 1d0/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
-      if(dabs(P(mu,nu)).ge.0.01) then
-         write(155, *) 'mu =', mu, 'nu = ', nu
-      endif
-   enddo
-enddo
-ct = 0
-!print*, 'Done Calculating P Matrix!'
-!print*, 'Calculating Q matrix...'
-do mu = 1, NumStates
-   do nu = 1, NumStates
-      Q_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-      Q_term_2 = calc_P_term_1(mu,nu, CB, LB, S_prim, HalfBandWidth)
-      Q(mu,nu) = 1d0/RDerivDelt**2 * (Q_term_1+Q_term_2-2*kronecker_delta(mu,nu))
-   enddo
-enddo
-ct = 0
-!print*, 'Done Calculating Q Matrix!'
+  use BasisSets
+  implicit none
+  TYPE(basis) LB, CB, RB
+  double precision P(NumStates, NumStates), Q(NumStates, NumStates), S_prim(HalfBandWidth+1, CB%xDim+2), RDerivDelt
+  integer HalfBandWidth, NumStates
+  integer ct, mu, nu, N_
+  double precision P_term_1, Q_term_1, Q_term_2
+  N_ = CB%xDim+2
+  !print*, 'Calculating P matrix...'
+  do mu = 1, NumStates
+     do nu = 1, NumStates
+        P_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+        P(mu,nu) = 1d0/RDerivDelt * ((P_term_1)-kronecker_delta(mu,nu))
+        if(dabs(P(mu,nu)).ge.0.01) then
+           write(155, *) 'mu =', mu, 'nu = ', nu
+        endif
+     enddo
+  enddo
+  ct = 0
+  !print*, 'Done Calculating P Matrix!'
+  !print*, 'Calculating Q matrix...'
+  do mu = 1, NumStates
+     do nu = 1, NumStates
+        Q_term_1 = calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+        Q_term_2 = calc_P_term_1(mu,nu, CB, LB, S_prim, HalfBandWidth)
+        Q(mu,nu) = 1d0/RDerivDelt**2 * (Q_term_1+Q_term_2-2*kronecker_delta(mu,nu))
+     enddo
+  enddo
+  ct = 0
+  !print*, 'Done Calculating Q Matrix!'
 contains
-   double precision function kronecker_delta(m,n)
-   implicit none
-         integer m,n
-         if (m .eq. n) then
-            kronecker_delta = 1
-         else
-            kronecker_delta = 0
-         endif
-      end function kronecker_delta
-   
-   double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
-      implicit none
-      integer mu, nu, HalfBandWidth, i, j
-      TYPE(BASIS) CB, RB
-      double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
-      term_1_mu_nu = 0d0
-      !print*, 'LOOKING FOR NEGATIVE VALUES OF S_ij'
-      do i = 1, CB%xDim
-         do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
-            call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
-            term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
-         enddo
-      enddo
-      !print*, '1/RDerivDelt*term_1_mu_nu=', term_1_mu_nu*(1/.0001)
-      !if (nu .eq. 9) stop
-      calc_P_term_1 = term_1_mu_nu
-   end function calc_P_term_1
+  double precision function kronecker_delta(m,n)
+    implicit none
+    integer m,n
+    if (m .eq. n) then
+       kronecker_delta = 1
+    else
+       kronecker_delta = 0
+    endif
+  end function kronecker_delta
+
+  double precision function calc_P_term_1(mu,nu, CB, RB, S_prim, HalfBandWidth)
+    implicit none
+    integer mu, nu, HalfBandWidth, i, j
+    TYPE(BASIS) CB, RB
+    double precision S_ij, S_prim(HalfBandWidth+1, CB%xDim+2), term_1_mu_nu
+    term_1_mu_nu = 0d0
+    !print*, 'LOOKING FOR NEGATIVE VALUES OF S_ij'
+    do i = 1, CB%xDim
+       do j = max(1,i-HalfBandWidth), min(CB%xDim,i+HalfBandWidth)
+          call calc_overlap_elem(i,j, CB, RB, S_prim, HalfBandWidth, S_ij)
+          term_1_mu_nu = term_1_mu_nu + CB%Psi(i,mu)*(S_ij*RB%Psi(j,nu))
+       enddo
+    enddo
+    !print*, '1/RDerivDelt*term_1_mu_nu=', term_1_mu_nu*(1/.0001)
+    !if (nu .eq. 9) stop
+    calc_P_term_1 = term_1_mu_nu
+  end function calc_P_term_1
 end subroutine calcCouplings_v2
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine calc_overlap_elem(m,n,u, ur, S_prim, HalfBandWidth, S_mn)
-use BasisSets
-implicit none
-TYPE(basis) u, ur
-integer m,n, HalfBandWidth, row, column, tmp
-double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
-S_mn, term_1, term_2, term_3, term_4, testing
-N_ = u%xDim
-m_alpha = u%alpha
-r_alpha = ur%alpha
-m_beta = u%beta
-r_beta = ur%beta
+  use BasisSets
+  implicit none
+  TYPE(basis) u, ur
+  integer m,n, HalfBandWidth, row, column, tmp
+  double precision N_, m_alpha, r_alpha, m_beta, r_beta, S_prim(HalfBandWidth+1,u%xDim+2),&
+       S_mn, term_1, term_2, term_3, term_4, testing
+  N_ = u%xDim
+  m_alpha = u%alpha
+  r_alpha = ur%alpha
+  m_beta = u%beta
+  r_beta = ur%beta
 
-if ((m .gt. 1).and.(m .lt. N_)) then
-   if ((n .gt. 1).and.(n .lt. N_)) then
-      row = m+1
-      column = n+1
-      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-      S_mn = term_1
-   else if (n .eq. 1) then !problem case
-      row = 1
-      column = m + 1
-      term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+  if ((m .gt. 1).and.(m .lt. N_)) then
+     if ((n .gt. 1).and.(n .lt. N_)) then
+        row = m+1
+        column = n+1
+        term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        S_mn = term_1
+     else if (n .eq. 1) then !problem case
+        row = 1
+        column = m + 1
+        term_1 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = 2
-      column = m + 1
-      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = 2
+        column = m + 1
+        term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      S_mn = term_1 + term_2
-   else if (n .eq. N_) then
-      row = m + 1
-      column = N_+1
+        S_mn = term_1 + term_2
+     else if (n .eq. N_) then
+        row = m + 1
+        column = N_+1
 
-      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = m + 1
-      column = N_+2
-      term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = m + 1
+        column = N_+2
+        term_2 = r_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      S_mn = term_1 + term_2
-   endif
-else if (m .eq. 1) then
-   if ((n .gt. 1).and.(n .lt. N_)) then
-      row = 1
-      column = n+1
-      term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        S_mn = term_1 + term_2
+     endif
+  else if (m .eq. 1) then
+     if ((n .gt. 1).and.(n .lt. N_)) then
+        row = 1
+        column = n+1
+        term_1 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = 2
-      column = n+1
-      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = 2
+        column = n+1
+        term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      S_mn = term_1 + term_2
-   else if (n .eq. 1) then
-      row = 1
-      column = 1
-      term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        S_mn = term_1 + term_2
+     else if (n .eq. 1) then
+        row = 1
+        column = 1
+        term_1 = m_alpha*r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = 1
-      column = 2
-      term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = 1
+        column = 2
+        term_2 = m_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = 2
-      column = 1
-      term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = 2
+        column = 1
+        term_3 = r_alpha*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = 2
-      column = 2
-      term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = 2
+        column = 2
+        term_4 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      S_mn = term_1+term_2+term_3+term_4
-   else if (n .eq. N_) then
-      row = 1
-      column = N_+1
-      term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        S_mn = term_1+term_2+term_3+term_4
+     else if (n .eq. N_) then
+        row = 1
+        column = N_+1
+        term_1 = m_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = 1
-      column = N_+2
-      term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = 1
+        column = N_+2
+        term_2 = m_alpha*r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = 2
-      column = N_+1
-      term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = 2
+        column = N_+1
+        term_3 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = 2
-      column = N_+2
-      term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = 2
+        column = N_+2
+        term_4 = r_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      S_mn = term_1+term_2+term_3+term_4
-   endif
-else if(m .eq. N_) then
-   if ((n .gt. 1).and.(n .lt. N_)) then
-      row = N_+1
-      column = n+1
-      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        S_mn = term_1+term_2+term_3+term_4
+     endif
+  else if(m .eq. N_) then
+     if ((n .gt. 1).and.(n .lt. N_)) then
+        row = N_+1
+        column = n+1
+        term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = N_+2
-      column = n+1
-      term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
+        row = N_+2
+        column = n+1
+        term_2 = m_beta*banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      S_mn = term_1+term_2
-   else if (n .eq. 1) then
-      row = N_+1
-      column = 1
-      term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        S_mn = term_1+term_2
+     else if (n .eq. 1) then
+        row = N_+1
+        column = 1
+        term_1 = r_alpha*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = N_+2
-      column = 2
-      term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = N_+2
+        column = 2
+        term_2 = banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = N_+2
-      column = 1
-      term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = N_+2
+        column = 1
+        term_3 = r_alpha*m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      row = N_+2
-      column = 2
-      term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
+        row = N_+2
+        column = 2
+        term_4 = m_beta*banded_zeros_check(row, column, HalfBandWidth, S_prim)
 
-      S_mn = term_1+term_2+term_3+term_4
-   else if (n .eq. N_) then
-      row = N_+1
-      column = N_+1
-      term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
-               
-      row = N_+1
-      column = N_+2
-      term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
+        S_mn = term_1+term_2+term_3+term_4
+     else if (n .eq. N_) then
+        row = N_+1
+        column = N_+1
+        term_1 = banded_zeros_check(row,column,HalfBandWidth,S_prim)
 
-      row = N_+2
-      column = N_+2
-      term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+        row = N_+1
+        column = N_+2
+        term_2 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*(m_beta+r_beta)
 
-      S_mn = term_1+term_2+term_3
-   endif
-endif
+        row = N_+2
+        column = N_+2
+        term_3 = banded_zeros_check(row,column,HalfBandWidth,S_prim)*m_beta*r_beta
+
+        S_mn = term_1+term_2+term_3
+     endif
+  endif
 
 contains
-double precision function banded_zeros_check(row,col,HalfBandWidth,S_prim)
-   implicit none
-   integer row, col, HalfBandWidth, newRow, tmp
-   double precision S_prim(:,:)
-   if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
-      banded_zeros_check = 0d0
-   else
-      if(row .gt. col) then
-         tmp = row
-         row = col
-         col = tmp
-      endif
-      newRow = HalfBandWidth + 1 + (row - col)
-      banded_zeros_check = S_prim(newRow, col)
-   endif
-end function banded_zeros_check
+  double precision function banded_zeros_check(row,col,HalfBandWidth,S_prim)
+    implicit none
+    integer row, col, HalfBandWidth, newRow, tmp
+    double precision S_prim(:,:)
+    if((row+HalfBandWidth .lt. col).or.(row-HalfBandWidth .gt. col)) then
+       banded_zeros_check = 0d0
+    else
+       if(row .gt. col) then
+          tmp = row
+          row = col
+          col = tmp
+       endif
+       newRow = HalfBandWidth + 1 + (row - col)
+       banded_zeros_check = S_prim(newRow, col)
+    endif
+  end function banded_zeros_check
 
 end subroutine calc_overlap_elem
 
@@ -942,7 +950,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
         potvalue = -YY(lx,kx)/R**4 + 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
         CB%V(lx,kx) = alpha*potvalue
-!                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
+        !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
      enddo
   enddo
   xV = 0d0
@@ -989,7 +997,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
            !D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
            D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
-!                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
+           !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
   enddo
@@ -1006,7 +1014,7 @@ end subroutine CalcHSD
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 subroutine CalcHamiltonian(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
-xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
+     xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
   implicit none
   double precision, external :: VSech
   integer Order,LegPoints,xDim,xNumPoints,xBounds(*),HalfBandWidth
@@ -1074,7 +1082,7 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
 
         potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
         Pot(lx,kx) = alpha*potvalue
-!                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
+        !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
      enddo
   enddo
 
@@ -1104,7 +1112,7 @@ xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H)
         if (Col .ge. Row) then
            NewRow = HalfBandWidth+1+Row-Col
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-!                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
+           !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
   enddo
@@ -1197,7 +1205,7 @@ subroutine FixPhase(NumStates,HalfBandWidth,MatrixDim,S,ncv,OldPsi,NewPsi)
      Phase = ddot(MatrixDim,NewPsi(:,i),1,TempPsi,1) ! Computes overlap of NewPsi with TempPsi
      if (Phase .lt. 0.0d0) then
         NewPsi(:,i) = -NewPsi(:,i)
-!        write(6,*) "i, overlap = ", i, Phase, ddot(MatrixDim,NewPsi(:,i),1,TempPsi,1)
+        !        write(6,*) "i, overlap = ", i, Phase, ddot(MatrixDim,NewPsi(:,i),1,TempPsi,1)
      endif
   enddo
 
@@ -1303,13 +1311,13 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   !r0New=r0*2.0d0
   deltax = 0.2d0*Rstar/R
 
-   !testing = 1
+  !testing = 1
 
   OPGRID=0
 
   NP = xNumPoints/4
   if(deltax.ge.(xMax - xMin)*0.25d0) then
-  !if (testing.eq.1) then
+     !if (testing.eq.1) then
      write(6,*) 'Switching to linear grid...' !PRINT WHERE (RADIUS) THIS SWITCH OCCURS !maybe try without optimization, use linear grid everywhere
      write(6,*) 'deltax = ', deltax
      write(6,*) 'deltax = ', deltax
@@ -1366,10 +1374,10 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
         xPoints(i)=(xPoints(i-1)+xPoints(i)+xPoints(i+1))/3.d0
      enddo
   enddo
-!  do i = 1, xNumPoints
-!     write(20,*) i, xPoints(i)
-!  enddo
-!  write(20,*) ' '
+  !  do i = 1, xNumPoints
+  !     write(20,*) i, xPoints(i)
+  !  enddo
+  !  write(20,*) ' '
   !      write(96,'(100e20.10)') R, (xPoints(k),k=1,xNumPoints)
 
 15 format(6(1x,1pd12.5))
@@ -1379,7 +1387,7 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   return
 end subroutine GridMakerIA
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
+subroutine GridMakerOld(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
   implicit none
   integer xNumPoints
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
@@ -1437,7 +1445,7 @@ subroutine GridMaker(mu,R,r0,xNumPoints,xMin,xMax,xPoints)
 
 
   return
-end subroutine GridMaker
+end subroutine GridMakerOld
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1654,3 +1662,92 @@ double precision function kdelta(mch,nch)
   endif
   return
 end function kdelta
+SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
+  implicit none
+  DOUBLE PRECISION grid(numpts)
+  DOUBLE PRECISION E1,E2,LE1,LE2,DE,LDE
+  INTEGER numpts, iE
+  CHARACTER(LEN=*), INTENT(IN) :: scale
+  !--------------------------------------------
+  ! Linear grid:
+  !--------------------------------------------
+  grid(1)=E1
+  IF((scale.EQ."linear").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)/DBLE(numpts-1)
+     DO iE=1,numpts
+        grid(iE) = E1 + (iE-1)*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! Log grid:
+  !--------------------------------------------
+  IF((scale.EQ."log").and.(numpts.gt.1)) THEN
+     LE1=dlog(E1)
+     LE2=dlog(E2)
+
+     LDE=(LE2-LE1)/DBLE(numpts-1d0)
+     DO iE=1,numpts
+        grid(iE) = dexp(LE1 + (iE-1)*LDE)
+        !        write(6,*) LE1, LE2, LDE, grid(iE)
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! NegLog grid:  (use this for a log spacing of negative numbers)
+  !--------------------------------------------
+  IF((scale.EQ."neglog").and.(numpts.gt.1)) THEN
+     LE1=dlog(-E2)
+     LE2=dlog(-E1)
+
+     LDE=(LE2-LE1)/DBLE(numpts-1d0)
+     DO iE=1,numpts
+        grid(iE) = -dexp(LE2 - (iE-1)*LDE)
+!        write(6,*) iE, grid(iE)
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! Quadratic grid:
+  !--------------------------------------------
+  IF((scale.EQ."quadratic").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**2*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! Cubic grid:
+  !--------------------------------------------
+  IF((scale.EQ."cubic").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**3*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! quartic grid:
+  !--------------------------------------------
+  IF((scale.EQ."quartic").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**4*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! sqrroot grid:
+  !--------------------------------------------
+  IF((scale.EQ."sqrroot").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**0.5d0*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! cuberoot grid:
+  !--------------------------------------------
+  IF((scale.EQ."cuberoot").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**0.33333333333333333333333333333d0*DE
+     ENDDO
+  ENDIF
+
+END SUBROUTINE GridMaker

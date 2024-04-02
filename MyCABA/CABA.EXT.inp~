@@ -1,0 +1,57 @@
+Legendre File
+Legendre.dat
+
+Legendre Points   WhereStart (R value to start coupling fits)
+    10              45.d0
+
+ J    Energy(hbar omega))     Einc(a.u.)    Loops_E   Incident Threshold 
+ 0    0.1    	              1.d-9         201              1
+
+ ma     		mi 
+ 6.015122d0  		170.9363230d0        
+
+NumChannels  NumOpenChannels(Box1)     Number of Adiabatic Boxes
+    8             8                           10
+
+Channels Open in Adiabatic Boxes:     NumOpenL NumOpenR
+                                         0        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        8
+                                         8        1
+
+Number of Rmatch Points    NumNewSectors  
+       100                      0
+
+Effective L              Threshold
+ 0.0d0                     0.5d0
+ 0.0d0                     1.5d0
+ 0.0d0                     2.5d0
+ 0.0d0                     3.5d0
+ 0.0d0                     50.d0
+ 0.0d0                     50.d0
+ 0.0d0                     50.d0
+ 0.0d0			   50.d0
+
+Pmatrix File
+Pmat.data
+ 
+V & Qmatrix File
+VQmat.data
+ 
+Fit Parameter File
+Fit.data
+
+Rinitial       Rfinal
+0.01d0         200.d0
+
+NumPoints to Interpolate (R < WhereStart) 
+1000      !(using the non-linear grid R^3)
+
+NumPoints in per wave lenght 
+6         !(will determine the radial step)
