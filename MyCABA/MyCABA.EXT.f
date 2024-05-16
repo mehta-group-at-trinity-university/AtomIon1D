@@ -153,6 +153,7 @@ c     Checking WhereStart
       open(18,file=FitFile,status='old')
       read(18,*)NumTotStates,NumDataPoints
       close(18)
+
       allocate(VQmat(NumDataPoints,Numchannels,Numchannels))
       allocate(xdata(NumDataPoints))
       open(300,file=QFile,status='old')
@@ -2855,9 +2856,11 @@ c-------------------------------------------------------------------------------
 c     call BesselBasePair(kVector(i),RMatch,leff(i),f,fp,g,gp)
          
          x = kVector(i)*Rmatch
-         ! In 1D we switch the roles of f and g so look carefully at the argument order of the following call
+C     In 1D we switch the roles of f and g so look carefully at the argument order of the following call
+c     Note that leff(i) should be zero for all two-body channels in 1D.
+c     Make sure this is the case in the input file
          call sphbes(leff(i),x,g,f,gp,fp)
-c     Now g ~ sin(kx) and f~-cos(kx) so we'll need to multiply f by a negative sign.         
+c     Now g ~ sin(kx) and f ~ -cos(kx) so we'll need to multiply f by a negative sign.         
          fp = -enorm(i)*(f + x*fp)
          f = -enorm(i)*Rmatch*f
          gp = enorm(i)*(g + x*gp)
@@ -2904,7 +2907,6 @@ c     calculate S-matrix
         Smatrix(i,i) = Smatrix(i,i) - (1.0d0,0.0d0)
        enddo
 
-
 c     calculate T-matrix
 
        do i = 1,NumOpenR
@@ -2921,7 +2923,6 @@ c     calculate T-matrix
          Tmatrix(i,j) = TmatrixAux(j,i)
         enddo
        enddo
-
        
 c i -> final state
 c j -> initial state
@@ -3072,13 +3073,13 @@ CU    USES chebev
       gammi=gam2+x*gam1
       return
       END
-
+c*************************************************************
       SUBROUTINE bessjy(x,xnu,rj,ry,rjp,ryp)
       implicit real*8 (a-h,o-z)
       INTEGER MAXIT
       double precision rj,rjp,ry,ryp,x,xnu,XMIN
       DOUBLE PRECISION EPS,FPMIN,PI
-      PARAMETER (EPS=1.e-16,FPMIN=1.e-30,MAXIT=200000,XMIN=2.d0,
+      PARAMETER (EPS=1.d-16,FPMIN=1.d-30,MAXIT=200000,XMIN=2.d0,
      *PI=3.141592653589793d0)
 CU    USES beschb
       INTEGER i,isign,l,nl
@@ -3247,7 +3248,7 @@ CU    USES beschb
 
  123  return
       END
-
+c**************************************************************
       Double Precision FUNCTION chebev(a,b,c,m,x)
       implicit real*8(a-h,o-z)
       INTEGER m
@@ -3272,7 +3273,7 @@ CU    USES beschb
       chebev=y*d-dd+0.5*c(1)
       return
       END
-
+c**************************************************************
       SUBROUTINE sphbes(n,x,sj,sy,sjp,syp)
       implicit real*8(a-h,o-z)
       double precision sj,sjp,sy,syp,x,n
@@ -3286,7 +3287,7 @@ CU    USES bessjy
          write(6,*) "Press enter to continue."
          read(5,*)
       endif
-      order=n+0.5
+      order=n+0.5d0
       if (x.le.1.86d5) then
       call bessjy(x,order,rj,ry,rjp,ryp)
       else
@@ -3367,7 +3368,7 @@ c     following assumes v = n+1/2 where n=0,1,2,......
       return
       end
 
-
+c**************************************************************
       subroutine BesselAsym(v,x,sj,sy,sjp,syp)
       integer k,b
       double precision v,x,sj,sy,sjp,syp,u
@@ -3424,7 +3425,7 @@ c following assumes v = n+1/2 where n=0,1,2,......
       
       return
       end
-
+c**************************************************************
       double precision FUNCTION factrl(n)
       INTEGER n
 C     USES gammln
@@ -3449,7 +3450,7 @@ C     USES gammln
       endif
       return
       END
-
+c**************************************************************
       double precision FUNCTION gammln(xx)
       double precision xx
       INTEGER j
@@ -3470,7 +3471,7 @@ C     USES gammln
       gammln=tmp+log(stp*ser/x)
       return
       END
-      
+c**************************************************************      
       subroutine SqrMatInv(A, N)
       implicit none
       integer N,info,lwk

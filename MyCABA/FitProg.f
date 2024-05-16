@@ -4,7 +4,7 @@
       double precision ma,mi
       integer ncount
       integer, parameter :: MaxChannels=8, MaxNumDataPts=1000 !61
-      integer, parameter :: NumBound=4
+      integer, parameter :: NumBound=2
       double precision, parameter :: Rdelay=10.d0,Xdiv=10.d0
       integer, parameter :: NumFitTerms=3
 !     This is for the atom-ion problem so use the Yb, Li masses

@@ -75,7 +75,7 @@ program AtomIon1D
   integer swapstate,iparam(11),ncv,info,troubleshooting
   integer i,j,k,iR,NumFirst,NumBound
   integer LeadDim,MatrixDim,HalfBandWidth
-  integer xDim, Nbs, NumOutputChannels
+  integer xDim, Nbs, NumOutputChannels, OPGRID
   integer, allocatable :: iwork(:), WriteChannels(:)
   double precision Tol,RChange
   double precision TotalMemory
@@ -159,8 +159,8 @@ program AtomIon1D
 
   read(5,*)
   read(5,*)
-  read(5,*) RSteps,RDerivDelt,RFirst,RLast
-  write(6,*) RSteps,RDerivDelt,RFirst,RLast
+  read(5,*) RSteps,RDerivDelt,RFirst,RLast, OPGRID
+  write(6,*) RSteps,RDerivDelt,RFirst,RLast, OPGRID
   read(5,*)
   read(5,*)
   read(5,*) NumOutputChannels
@@ -263,7 +263,7 @@ program AtomIon1D
         write(6,*) "minimum hyperradius too small."
         stop
      endif
-     call GridMakerIA(mu,mu12,theta_c,Rstar,R(iR),sbc,xNumPoints,xMin,xMax,xPoints)
+     call GridMakerIA(mu,mu12,theta_c,Rstar/lho,R(iR),sbc,xNumPoints,xMin,xMax,xPoints,OPGRID)
      !******** CONSTRUCTION OF BASIS SETS ********
      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
@@ -1294,8 +1294,14 @@ subroutine GridMakerHHL(mu,mu12,mu123,theta_c,R,r0,xNumPoints,xMin,xMax,xPoints)
 
   return
 end subroutine GridMakerHHL
+double precision function gridshapef(a,x)
+  implicit none
+  double precision a, x
+  double precision, parameter :: pi = 3.1415926535897932385d0
+  gridshapef = 4d0*pi*a*x - sin(4d0*pi*x)
+end function gridshapef
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
+subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints,OPGRID)
   implicit none
   integer xNumPoints, testing
   double precision mu,R,r0,xMin,xMax,xPoints(xNumPoints)
@@ -1303,77 +1309,42 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints)
   integer i,j,k,OPGRID,NP
   double precision Pi
   double precision r0New
-  double precision xRswitch
-  double precision xDelt,x0,x1,x2,x3,x4,deltax
-
+  double precision xRswitch,Rscale
+  double precision xDelt,x0,a
+  double precision, external :: gridshapef
 
   Pi = 3.1415926535897932385d0
-  !r0New=r0*2.0d0
-  deltax = 0.2d0*Rstar/R
-
-  !testing = 1
-
-  OPGRID=0
-
-  NP = xNumPoints/4
-  if(deltax.ge.(xMax - xMin)*0.25d0) then
-     !if (testing.eq.1) then
-     write(6,*) 'Switching to linear grid...' !PRINT WHERE (RADIUS) THIS SWITCH OCCURS !maybe try without optimization, use linear grid everywhere
-     write(6,*) 'deltax = ', deltax
-     write(6,*) 'deltax = ', deltax
-     OPGRID = 0
-  endif
 
   x0 = xMin
-  x1 = x0 + deltax
-  x2 = xMax - deltax
-  x3 = xMax
-  !      write(6,*) 'x0 = ', x0
-  !      write(6,*) 'x1 = ', x1
-  !      write(6,*) 'x2 = ', x2
-  !      write(6,*) 'x3 = ', x3
-  if((OPGRID.eq.1)) then
-     write(6,*) "using modified grid:(R,deltax) = ", R, deltax
+!  write(6,*) "making grid with"
+!  write(6,*) "xMin = ", xMin
+!  write(6,*) "xMax = ", xMax
+  
 
-     k = 1
-     xDelt = (x1-x0)
-     do i = 1,NP-1
-        xPoints(k) = (dble(i-1)/dble(NP-1))**2 * xDelt + x0
-        !            write(6,*) k, xPoints(k), (dble(i-1)/dble(NP-1))**2 * xDelt
-        k = k + 1
+  if((OPGRID.eq.1)) then
+     Rscale = 2d0*Rstar/R
+!     write(6,*) "using modified grid:(R,Rstar,Rscale) = ", R, Rstar, Rscale
+     xDelt = (xMax-xMin)
+     a = exp(max(Rscale, 0.75d0))
+     do i = 1, xNumPoints
+        xPoints(i) = x0 + xDelt/gridshapef(a,1d0) * (gridshapef(a,dble(i-1d0)/dble(xNumPoints-1d0)))
+!        write(6,*) i, xPoints(i)
      enddo
-     xDelt = (x2-x1)
-     do i = 1,2*NP+1
-        xPoints(k) = dble(i-1)/(2*NP+1)*xDelt + x1
-        !            write(6,*) k, xPoints(k)
-        k = k + 1
-     enddo
-     xDelt = (x3-x2)
-     do i = 1,NP-1
-        xPoints(k) = (dble(i-1)/dble(NP-1))**0.5d0*xDelt + x2
-        !            write(6,*) k, xPoints(k),(dble(i-1)/dble(NP-1))**0.5d0*xDelt
-        k = k + 1
-     enddo
-     xPoints(k)=x3
-     !         write(6,*) k, xPoints(k),(dble(i-1)/dble(NP-1))**0.5d0*xDelt
-     !     FOR SMALL R, USE A LINEAR GRID
   else
-     !write(6,*) "Using linear grid...(R,deltax) = ",R, deltax
-     k = 1
      xDelt = (xMax-xMin)/dfloat(xNumPoints-1)
      do i = 1,xNumPoints
-        xPoints(k) = (i-1)*xDelt + x0
-        k = k + 1
+        xPoints(i) = (i-1)*xDelt + x0
      enddo
   endif
 
-  !     Smooth Grid 
 
-  do j=1,10
-     do i = 2, xNumPoints-1
-        xPoints(i)=(xPoints(i-1)+xPoints(i)+xPoints(i+1))/3.d0
-     enddo
-  enddo
+!!$  !     Smooth Grid 
+!!$
+!!$  do j=1,10
+!!$     do i = 2, xNumPoints-1
+!!$        xPoints(i)=(xPoints(i-1)+xPoints(i)+xPoints(i+1))/3.d0
+!!$     enddo
+!!$  enddo
   !  do i = 1, xNumPoints
   !     write(20,*) i, xPoints(i)
   !  enddo

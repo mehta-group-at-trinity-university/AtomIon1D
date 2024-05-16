@@ -1,0 +1,566 @@
+      Program FitProg
+!implicit real*8 (a-h,o-z)
+      implicit none
+      double precision ma,mi
+      integer ncount
+      integer, parameter :: MaxChannels=6, MaxNumDataPts=1000 !61
+      integer, parameter :: NumBound=2
+      double precision, parameter :: Rdelay=10.d0,Xdiv=10.d0
+      integer, parameter :: NumFitTerms=3
+!     This is for the atom-ion problem so use the Yb, Li masses
+      integer maxdim,mrdim,NumDataPoints
+      integer*2 ifa,ifb,mfa,mfb,onoff, i, j, k, ii, iR
+
+      double precision VQmat(MaxNumDataPts,Maxchannels,Maxchannels)
+      double precision xdata(MaxNumDataPts)
+      double precision Pmat(MaxNumDataPts,MaxChannels,MaxChannels)
+      double precision Psquare(MaxNumDataPts,MaxChannels,MaxChannels)
+      double precision vmat(MaxNumDataPts,MaxChannels),thresh(MaxChannels)
+      double precision Mass, massfactor, ang, dummy, Cfactor
+      double precision FitCoeffs(NumFitTerms)
+      double precision VQFit(MaxChannels,MaxChannels,NumFitTerms)
+      double precision PmatFit(MaxChannels,MaxChannels,NumFitTerms)
+      integer NumFitPoints
+      integer FlagP(MaxChannels,MaxChannels)
+      integer FlagQ(MaxChannels,MaxChannels)
+      double precision xPoints(MaxNumDataPts),yPoints(MaxNumDataPts)
+      double precision Errors(MaxNumDataPts)
+      double precision rmsError,FitRangeMin,FitRangeMax
+      double precision kExponents(3),VQExponents(MaxChannels,MaxChannels,NumFitTerms)
+      double precision PmatExp(MaxChannels,MaxChannels,NumFitTerms)
+      double precision FitRangeMinVar,FitRangeMinOpt(1:100),aux
+      double precision Leff(1:100),LeffMin(1:100000),Rmin(1:100000)
+      double precision L0(1:100),dummyV(100,100)
+
+
+c****************************************************************
+c     Note: All open channels should precede any closed channels in *
+c     the matrix setup.                                             *
+c****************************************************************
+
+      open(18, file = 'Fit.data')
+      open(19, file = 'FitLeff.data')
+      write(18,*) MaxChannels,MaxNumDataPts
+c     mass = (m1*m2*m3*m4/(m1+m2+m3+m4))**(1.d0/3.d0)
+      mi=170.9363230d0
+      ma=6.015122d0
+      ma = ma/mi
+      mi = 1d0
+      Mass = dsqrt(ma)
+      Cfactor = 8.0d0*Mass
+      
+      do i=1,MaxChannels
+         thresh(i)=0.d0
+      enddo
+      do i=1,NumBound
+         thresh(i)=-1.0d0
+      enddo
+
+c     Only channels with NEGATIVE thresh(i) get their threshold energy fitted too
+
+      open(100,file='DiabaticEnergies.dat',status='old')
+      open(200,file='Pmat.dat',status='old')
+      open(300,file='VQmat.dat',status='old')
+
+      massfactor = -0.5d0/Mass
+      mrdim = MaxChannels
+      write(6,*) "Mass = ", Mass
+      write(6,*) "Cfactor = ", Cfactor
+      write(6,*) "massfactor = ", massfactor
+
+      write(6,*) "MaxNumDataPts = ", MaxNumDataPts, "mrdim = ", mrdim
+
+      read(100,*)
+      do i=1,MaxNumDataPts
+         read(100,11) dummy,(vmat(i,j),j=1,mrdim)
+         read(200,*) xdata(i)
+         read(300,*)
+         do j=1,mrdim
+            read(200,11)(Pmat(i,j,k),k=1,mrdim)
+            read(300,11)(VQmat(i,j,k),k=1,mrdim)
+         enddo
+         !write(6,*) xdata(i), Pmat(i,1,2)
+      enddo
+
+ 11   format(1P,100e22.12)
+ 20   format(1P,100e20.12)
+
+      FitRangeMax = xdata(MaxNumDataPts) 
+      NumDataPoints = MaxNumDataPts
+
+c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+c     c    %%%%  J=0+   %%%%
+c$$$  
+c$$$  Leff(1)=0.d0; 
+c$$$  Leff(2)=1.5d0; 
+c$$$  Leff(3)=3.5d0; 
+c$$$  Leff(4)=5.5d0; 
+c$$$  Leff(5)=7.5d0; 
+c$$$  
+c$$$  L0=0.d0
+c$$$  
+c$$$  Leff(NumBound+1) = 4.5d0;     L0(NumBound+1) = 1.d0;   
+c$$$  Leff(NumBound+2) = 6.5d0;     L0(NumBound+2) = 1.d0;   
+c$$$  Leff(NumBound+3) = 8.5d0;     L0(NumBound+3) = 3.d0;   
+c$$$  Leff(NumBound+4) = 10.5d0;    L0(NumBound+4) = 1.d0;   
+c$$$  Leff(NumBound+5) = 10.5d0;    L0(NumBound+5) = 3.d0;   
+
+c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      
+      Leff(1)=0.d0; 
+      Leff(2)=0.d0; 
+      Leff(3)=0.d0; 
+      Leff(4)=0.d0; 
+      
+      L0=0.d0
+
+      Leff(NumBound+1) = 0.d0;!     L0(NumBound+1) = 1.d0;   
+      Leff(NumBound+2) = 0.d0;!     L0(NumBound+2) = 1.d0;   
+      Leff(NumBound+3) = 0.d0;!     L0(NumBound+3) = 3.d0;   
+      Leff(NumBound+4) = 0.d0;!    L0(NumBound+4) = 1.d0;   
+
+c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      FitRangeMin = FitRangeMax - Rdelay
+c     write(19,*)'FitRangeMin =   OPTIMIZED'
+      write(19,*)'FitRangeMin =', FitRangeMin
+      write(19,*)'FitRangeMax =',FitRangeMax
+      write(19,*)
+
+
+      do i=1,NumDataPoints
+         write(3000,*)xdata(i)
+         write(3005,*)xdata(i)
+         !do j=1,mrdim
+         !   do k=1,mrdim
+         !      Pmat(i,j,k) = massfactor*Pmat(i,j,k)
+         !      VQmat(i,j,k) = massfactor*VQmat(i,j,k)
+         !   enddo
+            !VQmat(i,j,j) = vmat(i,j) + VQmat(i,j,j)
+         !   Pmat(i,j,j) = 0.d0
+         !enddo
+         do j=1,mrdim
+            write(3000,3001)(VQmat(i,j,k),k=1,mrdim)
+            write(3005,3001)(Pmat(i,j,k),k=1,mrdim)
+         enddo
+      enddo
+ 3001 format(100(e20.12,1x))
+
+      do i=1,MaxNumDataPts
+         write(777,11)xdata(i),((Pmat(i,j,k),j=k,3),k=1,3)
+         write(888,11)xdata(i),((VQmat(i,j,k),j=k,3),k=1,3)
+      enddo   
+
+      
+      DO j=1,mrdim
+
+         ncount = 0 
+         FitRangeMinVar = FitRangeMax-Rdelay
+         LeffMin = 1.d5        
+
+ 123     NumFitPoints=0
+         DO iR=1,NumDataPoints
+            IF (xdata(iR).LT.FitRangeMax.AND.xdata(iR).GE.FitRangeMinVar) THEN
+               NumFitPoints=NumFitPoints+1
+               xPoints(NumFitPoints)=xdata(iR)
+               yPoints(NumFitPoints)=VQmat(iR,j,j)
+            ENDIF
+         ENDDO
+
+c     Uu-(1/2mu)*Quu : (BC-BC)
+         IF(thresh(j).LT.0.d0) THEN
+            IF (Leff(j).EQ.0) THEN   
+               kExponents(1)=0.0d0
+               kExponents(2)=2.0d0
+               kExponents(3)=3.0d0
+            ELSE
+               kExponents(1)=0.0d0
+               kExponents(2)=2.0d0
+               kExponents(3)=3.0d0
+            ENDIF
+         ENDIF
+c     Uu-(1/2mu)*Quu : (CC-CC)
+         IF(thresh(j).GE.0.d0) THEN
+            kExponents(1)=2.0d0
+            kExponents(2)=3.0d0
+            kExponents(3)=4.0d0
+         ENDIF
+
+         CALL FitTail(NumFitTerms,kExponents,xPoints,yPoints,Errors,
+     .        NumFitPoints,MaxNumDataPts,rmsError,FitCoeffs)
+
+         DO ii=1,3
+            VQFit(j,j,ii)=FitCoeffs(ii)
+            VQExponents(j,j,ii)=kExponents(ii)
+         ENDDO
+
+         if (j.le.NumBound)then
+            if (Leff(j).eq.0) then
+               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2))))
+            else
+               ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,j,2))))
+            endif
+         else
+            ang = 0.5d0*(-1.0d0 + dsqrt(1.0d0 + Cfactor*abs(VQFit(j,j,1))))
+         endif
+
+c$$$         if (FitRangeMinVar.ge.(FitRangeMax/Xdiv)) then
+c$$$            ncount = ncount+1
+c$$$            LeffMin(ncount) = dabs(Leff(j)-ang)
+c$$$            Rmin(ncount) = FitRangeMinVar
+c$$$            FitRangeMinVar = FitRangeMinVar-1.d0
+c$$$            goto 123
+c$$$         else
+c$$$            FitRangeMinOpt(j) = Rmin(MinLoc(LeffMin,dim=1))
+c$$$         endif
+
+      ENDDO
+
+c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+c     FitRangeMin = 2000.d0
+c     FitRangeMax = 100000.d0
+      FitRangeMinOpt = FitRangeMin
+
+      DO j=1,mrdim
+         DO k=j,mrdim
+            NumFitPoints=0
+            DO iR=1,NumDataPoints
+               IF(xdata(iR).LT.FitRangeMax .AND. xdata(iR).GE.FitRangeMinOpt(j))THEN
+                  NumFitPoints=NumFitPoints+1
+                  xPoints(NumFitPoints)=xdata(iR)
+                  yPoints(NumFitPoints)=VQmat(iR,j,k)
+               ENDIF
+            ENDDO
+
+c     Uu-(1/2mu)*Quu 
+            IF (j.EQ.k) THEN  ! Diagonal initial guesses
+               IF (thresh(j).LT.0.d0) THEN
+c     (BC-BC)
+                  IF (Leff(j).EQ.0) THEN   
+                     kExponents(1)=0.0d0
+                     kExponents(2)=2.0d0
+                     kExponents(3)=3.0d0
+                  ELSE
+                     kExponents(1)=0.0d0
+                     kExponents(2)=2.0d0
+                     kExponents(3)=3.0d0
+                  ENDIF
+               ELSE
+c     (CC-CC)
+                  kExponents(1)=-2.0d0 ! atom-ion bound channels go as R^2 at long range so fit to a harmonic potential
+                  kExponents(2)=0.0d0
+                  kExponents(3)=-3.0d0
+               ENDIF
+            ENDIF
+
+c     Quv : (BC-BC)        
+            IF (j.NE.k) THEN  !off-diagonal initial guesses for Quv among 2-body type channels
+               IF (thresh(j) .LT. 0.0d0 .AND. thresh(k) .LT. 0.0d0) THEN
+                  IF ( Leff(j) .EQ. Leff(k) ) THEN
+                     kExponents(1)=2.0d0
+                     kExponents(2)=3.0d0
+                     kExponents(3)=4.0d0
+                  ELSE
+                     kExponents(1)=2.0d0 ! the real coupling behaves like : exp(-R)
+                     kExponents(2)=3.0d0
+                     kExponents(3)=4.0d0
+                  ENDIF   
+               ENDIF
+            ENDIF
+
+c     Quv : (BC-CC)
+            IF (j.NE.k) THEN    !off-diagonal Q-matrix couplings between 2-body channels and "bound" atom-ion channels
+               IF (thresh(j) .LT. 0.0d0 .AND. thresh(k) .GE. 0.0d0) THEN
+!                  IF (Leff(j) .GE. L0(k) ) THEN  
+                     kExponents(1)=2d0!1.5d0+Leff(j)+1.d0+(1.d0)
+                     kExponents(2)=3d0!2.5d0+Leff(j)+1.d0+(1.d0)
+                     kExponents(3)=4d0!3.5d0+Leff(j)+1.d0+(1.d0)
+!                  ELSE
+!                     kExponents(1)=1.5d0+L0(k)-Leff(j)+1.d0+(1.d0)
+!                     kExponents(2)=2.5d0+L0(k)-Leff(j)+1.d0+(1.d0)
+!                     kExponents(3)=3.5d0+L0(k)-Leff(j)+1.d0+(1.d0)
+!                  ENDIF
+               ENDIF
+            ENDIF
+
+
+c     Quv : (CC-CC)
+            IF (j.NE.k) THEN
+               IF (thresh(j) .GE. 0.0d0 .AND. thresh(k) .GE. 0.0d0) THEN
+                  kExponents(1)=2.0d0
+                  kExponents(2)=3.0d0
+                  kExponents(3)=4.0d0
+c$$$                  IF (Leff(j) .EQ. Leff(k) ) THEN  
+c$$$               kExponents(1)=2.0d0+dabs(L0(j)-L0(k))+(1.d0)      
+c$$$                     kExponents(2)=3.0d0+dabs(L0(j)-L0(k))+(1.d0)
+c$$$                     kExponents(3)=4.0d0+dabs(L0(j)-L0(k))+(1.d0)
+c$$$                  ELSE
+c$$$                     IF (L0(j) .EQ. L0(k) ) THEN   
+c$$$                        kExponents(1)=2.0d0+2.d0*max(L0(j),L0(k))+(1.d0)
+c$$$                        kExponents(2)=3.0d0+2.d0*max(L0(j),L0(k))+(1.d0)
+c$$$                        kExponents(3)=4.0d0+2.d0*max(L0(j),L0(k))+(1.d0)
+c$$$                     ELSE
+c$$$                        kExponents(1)=2.0d0+max(L0(j),L0(k))+(1.d0)
+c$$$                        kExponents(2)=3.0d0+max(L0(j),L0(k))+(1.d0)
+c$$$                        kExponents(3)=4.0d0+max(L0(j),L0(k))+(1.d0)
+c$$$                     ENDIF 
+                  !ENDIF
+               ENDIF
+            ENDIF
+
+
+            CALL FitTail(NumFitTerms,kExponents,xPoints,yPoints,Errors,
+     >           NumFitPoints,MaxNumDataPts,rmsError,FitCoeffs)
+            
+            DO ii=1,3
+               VQFit(j,k,ii)=FitCoeffs(ii)
+               VQExponents(j,k,ii)=kExponents(ii)
+               VQFit(k,j,ii)=FitCoeffs(ii)
+               VQExponents(k,j,ii)=kExponents(ii)
+            ENDDO
+
+            if (j .eq. k)then
+               if (j .le. NumBound)then
+                  if (Leff(j).eq.0) then
+                     ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,k,2))))
+                     write(19,3313)j,VQFit(j,k,1),(dabs(VQFit(j,k,2))-Leff(j)*(Leff(j)+1.d0)/2.d0/Mass),ang,FitRangeMinOpt(j)
+                  else
+                     ang = 0.5d0*(-1.0d0+dsqrt(1.0d0+Cfactor*abs(VQFit(j,k,2))))
+                     write(19,3313)j,VQFit(j,k,1),(dabs(VQFit(j,k,2))-Leff(j)*(Leff(j)+1.d0)/2.d0/Mass),ang,FitRangeMinOpt(j)
+                  endif
+               else
+                  ang = 0.5d0*(-1.0d0 + dsqrt(1.0d0 + Cfactor*abs(VQFit(j,k,1))))
+                  write(19,3313)j,VQFit(j,k,1),(dabs(VQFit(j,k,1))-(Leff(j)*(Leff(j)+1.d0))/2.d0/Mass),ang,FitRangeMinOpt(j)
+c     write(19,3313)j,VQFit(j,k,1),VQFit(j,k,2),ang,FitRangeMinOpt(j)
+               endif
+            endif
+            write(18,5151) j,k,(VQExponents(j,k,ii),ii=1,3)
+            write(18,5152) (VQFit(j,k,ii),ii=1,3),rmsError
+ 5151       format(2(1x,i2),3(3x,f8.2), ' **VQfit parameters')
+c     5152   format(3(1x,1pd14.7),5x,1pd10.3)
+ 5152       format(3(1x,1pe20.12),5x,1pe10.3)
+
+c     ** Next fit the P-matrix elements when j.ne.k
+            IF(j.NE.k) THEN
+
+               NumFitPoints=0
+               DO iR=1,NumDataPoints
+                  IF(xdata(iR).LT.FitRangeMax .AND. xdata(iR).GE.FitRangeMinOpt(j)) THEN
+                     NumFitPoints=NumFitPoints+1
+                     xPoints(NumFitPoints)=xdata(iR)
+                     yPoints(NumFitPoints)=Pmat(iR,j,k)
+                  ENDIF
+               ENDDO
+
+c     Puv : (BC-BC)        
+               IF (thresh(j) .LT. 0.0d0 .AND. thresh(k) .LT. 0.0d0) THEN
+                  !IF ( Leff(j) .EQ. Leff(k) ) THEN
+                     kExponents(1)=1.0d0
+                     kExponents(2)=2.0d0
+                     kExponents(3)=3.0d0
+                  !ELSE
+                  !   kExponents(1)=2.50d0 ! the real coupling behaves like : exp(-R)
+                  !   kExponents(2)=3.50d0
+                  !   kExponents(3)=4.50d0
+                  !ENDIF   
+               ENDIF
+
+c     Puv : (BC-CC)
+               IF (thresh(j) .LT. 0.0d0 .AND. thresh(k) .GE. 0.0d0) THEN
+                  !IF (Leff(j) .GE. L0(k) ) THEN  
+                     kExponents(1)=1.d0
+                     kExponents(2)=2.d0
+                     kExponents(3)=3.d0
+                  !ELSE
+                  !   kExponents(1)=1.5d0+L0(k)-Leff(j)+1.d0
+                  !   kExponents(2)=2.5d0+L0(k)-Leff(j)+1.d0
+                  !   kExponents(3)=3.5d0+L0(k)-Leff(j)+1.d0
+                  !ENDIF
+               ENDIF
+
+c     Puv : (CC-CC)
+               IF (thresh(j) .GE. 0.0d0 .AND. thresh(k) .GE. 0.0d0) THEN
+                  !IF (Leff(j) .EQ. Leff(k) ) THEN  
+                     kExponents(1)=1.0d0
+                     kExponents(2)=2.0d0
+                     kExponents(3)=3.0d0
+                  !ELSE
+                  !   kExponents(1)=2.0d0+max(L0(j),L0(k))
+                  !   kExponents(2)=3.0d0+max(L0(j),L0(k))
+                  !   kExponents(3)=4.0d0+max(L0(j),L0(k))
+                  !ENDIF   
+               ENDIF
+
+
+               CALL FitTail(NumFitTerms,kExponents,xPoints,yPoints,Errors,
+     >              NumFitPoints,MaxNumDataPts,rmsError,FitCoeffs)
+
+
+               DO ii=1,3
+                  PmatFit(j,k,ii)=FitCoeffs(ii)
+                  PmatExp(j,k,ii)=kExponents(ii)
+                  PmatFit(k,j,ii)=-FitCoeffs(ii)
+                  PmatExp(k,j,ii)=kExponents(ii)
+               ENDDO
+               write(18,5153) j,k,(kExponents(ii),ii=1,3)
+               write(18,5152) (FitCoeffs(ii),ii=1,3),rmsError
+ 5153          format(2(1x,i2),3(3x,f8.2), ' **PmatFit parameters')
+            ENDIF
+
+         ENDDO
+      ENDDO
+      
+      close(100)
+      close(200)
+      close(300)
+      close(400)
+
+ 331  format(4(e16.8,1x))
+ 3313 format(I4,1X,(e21.13),1X,(e21.13),1X,f14.8,1X,f12.4)
+c33   13 format(I4,1X,e16.8,1X,e16.8,1X,f16.8,1X,f16.8)
+
+
+      stop
+      end
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c     --  This fitting routine is written in Fortran 90
+      Subroutine FitTail(nTerms,kExp,xPoints,yPoints,Errors,nData,MaxPts,rmsError,cc)
+      implicit real*8(a-h,o-z)
+      integer nData,nTerms,MaxPts
+      double precision cc(nTerms),Errors(MaxPts)
+      double precision xPoints(MaxPts),yPoints(MaxPts),rmsError
+      double precision r0,fitfuncs,dfloat
+      double precision DELik,qmax,factor,sum1,sum2,error1,error2
+      double precision kExp(3)
+      double precision, allocatable :: xMat(:,:),aVec(:)
+      double precision, allocatable :: Aux(:,:),SaveMatrix(:,:),SecondVec(:)
+      double precision, allocatable :: SolutionVec(:),SaveVec(:)
+      integer n,i,j,k,Row,Col,nCols,MasterCol
+
+c     c    external fitfuncs
+
+      n = nTerms
+      r0=xPoints(nData/2)
+
+      nCols=2*n+1
+      allocate(xMat(n,n),aVec(n),Aux(n,nCols),SaveMatrix(n,n),SecondVec(n))
+      allocate(SolutionVec(n),SaveVec(n))
+
+C     --  now set up the matrix xMat and store it in the left-most part of Aux:
+
+      do kp=1,n
+         do k=1,n
+            xMat(kp,k)=0.d0
+            do i=1,nData
+               xMat(kp,k) = xMat(kp,k)+fitfuncs(kExp(kp),xPoints(i),r0)*
+     >              fitfuncs(kExp(k),xPoints(i),r0)
+            enddo
+            Aux(kp,k) = xMat(kp,k)
+         enddo
+         Aux(kp,n+1) = 0.d0
+         do i=1,nData
+            Aux(kp,n+1)=Aux(kp,n+1)+yPoints(i)*fitfuncs(kExp(kp),xPoints(i),r0)
+         enddo
+         SaveVec(kp)=Aux(kp,n+1)
+      enddo
+
+      do i=1,n
+         do k=1,n
+            DELik=0.d0
+            if(i.eq.k) DELik=1.d0
+            Aux(i,k+n+1)=DELik
+         enddo
+      enddo
+
+ 155  format(4(1x,1pd14.7))
+
+      SaveMatrix=xMat
+
+C     -- Now solve the necessary linear system by performing 
+C     ---- row operations on this matrix Aux:
+C     -- The algorithm I will adopt here is a simple one without "pivoting",
+C     ---  "Gaussian elimination with backsubstitution" (see Numerical Recipes)
+      
+C     -- Step 1: stabilize by rescaling matrices so that the maximum element of xMat 
+C     ----  in any given row is unity.
+
+      DO Row=1,n
+         qmax=0.d0
+         DO Col=1,n
+            IF(dabs(Aux(Row,Col)).GT.qmax) THEN
+               qmax = dabs(Aux(Row,Col))
+            ENDIF
+         ENDDO
+
+         DO Col=1,nCols
+            Aux(Row,Col) = Aux(Row,Col)/qmax
+         ENDDO
+      ENDDO
+
+C     -- Now perform the triangularization of the matrix:
+
+      DO MasterCol=1,n-1
+         IF(dabs(Aux(MasterCol,MasterCol)).LT.1.d-20) then
+            write(6,*) 'Division by zero problem -- need to implement pivoting'
+            write(6,*) MasterCol,Aux(MasterCol,MasterCol)
+            STOP
+         ENDIF	  
+         
+         DO Row=MasterCol+1,n
+            factor = Aux(Row,MasterCol)/Aux(MasterCol,MasterCol)
+            DO Col=1,nCols
+               Aux(Row,Col) = Aux(Row,Col)-factor*Aux(MasterCol,Col)
+            ENDDO
+         ENDDO
+      ENDDO
+
+C     -- Now it should be triangular, so we can "back-substitute".
+C     ---- First get the desired solution vector:
+
+      aVec(n) = Aux(n,n+1)/Aux(n,n)
+      DO Row = n-1,1,-1
+         IF(dabs(Aux(Row,Row)).LT.1.d-20) then
+            write(6,*) '**Division by zero problem** '
+            write(6,*) Row,Aux(Row,Row)
+            STOP
+         ENDIF
+         aVec(Row) = Aux(Row,n+1) 
+         DO i=Row+1,n
+            aVec(Row) = aVec(Row) - Aux(Row,i)*aVec(i)
+         ENDDO
+         aVec(Row) = aVec(Row)/Aux(Row,Row)
+      ENDDO
+
+      DO Col=1,n
+         cc(Col)=r0**kExp(Col)*aVec(Col)
+      ENDDO
+
+C     -- Next cycle through the modified column vectors of the unit matrix to
+C     -- construct the inverse of the original matrix in case it is desired
+C     -- To save storage, overwrite the original matrix.
+
+C     -- Compare the final accuracy of this calculation by testing the ability of
+C     --- the polynomial to reproduce the data points:
+
+      rmsError=0.d0
+      DO Row=1,nData
+         sum1=0.d0
+         DO i=1,n
+            sum1=sum1+cc(i)*fitfuncs(kExp(i),xPoints(Row),r0)/r0**kExp(i)
+         ENDDO
+         error1=sum1-yPoints(Row)
+         Errors(Row)=error1
+         rmsError = rmsError + error1**2
+      ENDDO	
+      rmsError = dsqrt(rmsError/dfloat(nData))
+      deallocate(aVec,xMat,Aux,SaveMatrix,SecondVec,SolutionVec,SaveVec)
+      RETURN
+      END
+      
+      double precision function fitfuncs(kExp,x,r0)
+      double precision kExp
+      double precision x,r0
+      fitfuncs = (r0/x)**kExp
+      return
+      end
+      
