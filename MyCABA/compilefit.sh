@@ -1,1 +1,1 @@
-gfortran -ffixed-line-length-none -O3 fitprog.f -o fitprog.x
+gfortran -ffixed-line-length-none -O3 NewFitProg.f -o NewFitProg.x
