@@ -27,6 +27,9 @@ c****************************************************************
 c     Note: All open channels should precede any closed channels in *
 c     the matrix setup.                                             *
 c****************************************************************
+c      open(100,file='DiabaticEnergies-LR=0-0.dat',status='old')
+c      open(200,file='Pmat-LR=0-0.dat',status='old')
+c      open(300,file='VQmat-LR=0-0.dat',status='old')
       open(100,file='DiabaticEnergies.dat',status='old')
       open(200,file='Pmat.dat',status='old')
       open(300,file='VQmat.dat',status='old')
@@ -91,16 +94,18 @@ c     write(19,*)'FitRangeMin =   OPTIMIZED'
       write(19,*)
 
 
-      do i=1,NumDataPoints
-         write(3000,*)xdata(i)
-         write(3005,*)xdata(i)
-         do j=1,mrdim
-            write(3000,3001)(VQmat(i,j,k),k=1,mrdim)
-            write(3005,3001)(Pmat(i,j,k),k=1,mrdim)
-         enddo
-      enddo
+c$$$      do i=1,NumDataPoints
+c$$$         write(3000,*)xdata(i)
+c$$$         write(3005,*)xdata(i)
+c$$$         do j=1,mrdim
+c$$$            write(3000,3001)(VQmat(i,j,k),k=1,mrdim)
+c$$$            write(3005,3001)(Pmat(i,j,k),k=1,mrdim)
+c$$$         enddo
+c$$$      enddo
  3001 format(100(e20.12,1x))
 
+      open(unit = 777, file = "QuickPmat.dat")
+      open(unit = 888, file = "QuickVQmat.dat")
       do i=1,MaxNumDataPts
          write(777,11)xdata(i),((Pmat(i,j,k),j=k,3),k=1,3)
          write(888,11)xdata(i),((VQmat(i,j,k),j=k,3),k=1,3)

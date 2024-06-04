@@ -239,7 +239,7 @@ program AtomIon1D
   open(unit = 103, file = "QuickPMat.dat")
   open(unit = 104, file = "QuickEffV.dat")
   open(unit = 105, file = "VQmat.dat")
-  open(unit = 106, file = "QuickQtil.dat")
+
   allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
 
   CB%Left = Left
@@ -315,10 +315,10 @@ program AtomIon1D
      !-------- Couplings from the diabatized eigenstates -------------!
      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P(:,:,iR),QTil(:,:,iR),ncv)      
 
-     write(103,*) R(iR),(P(WriteChannels(WriteChannels(NumOutPutChannels-4)),WriteChannels(i),iR),i=1,NumOutputChannels)
+     write(103,*) R(iR),(P(WriteChannels(1),WriteChannels(i),iR),i=1,NumOutputChannels)
      write(104,*) R(iR),(AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
           + QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu),i=1,NumOutputChannels)
-     write(106,*) R(iR), (QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i=1, NumOutputChannels)
+
      !write(104,*) R(iR), (QTil(i,i,iR)*R(iR)**2, i=1,1)
      !write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
      !--------------------------------------------------------------------------!
@@ -331,7 +331,7 @@ program AtomIon1D
      endif
 
      call CPU_TIME(t2)
-     write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), xMin, xMax, (CB%Energies(i,1), i=1,5)
+     write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
 
   enddo
 
@@ -339,6 +339,8 @@ program AtomIon1D
      write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies      
      write(101,11) R(iR)
      write(102,11) R(iR)
+!     write(104,11) R(iR), (AllEnergies(WriteChannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
+!          +  QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i = 1, NumOutPutChannels)
      write(105,11) R(iR)
      do i=1,NumOutputChannels
         write(101,11) (P(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels)
@@ -993,6 +995,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
            NewRow = HalfBandWidth+1+Row-Col
            S(NewRow,Col) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
+           !D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
            D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
            !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
@@ -1312,27 +1315,27 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints,
 
   Pi = 3.1415926535897932385d0
 
-!  x0 = xMin
+  x0 = xMin
 !  write(6,*) "making grid with"
 !  write(6,*) "xMin = ", xMin
 !  write(6,*) "xMax = ", xMax
   
 
-!!$  if((OPGRID.eq.1)) then
-!!$     Rscale = 2d0*Rstar/R
-!!$!     write(6,*) "using modified grid:(R,Rstar,Rscale) = ", R, Rstar, Rscale
-!!$     xDelt = (xMax-xMin)
-!!$     a = exp(max(Rscale, 0.75d0))
-!!$     do i = 1, xNumPoints
-!!$        xPoints(i) = x0 + xDelt/gridshapef(a,1d0) * (gridshapef(a,dble(i-1d0)/dble(xNumPoints-1d0)))
-!!$!        write(6,*) i, xPoints(i)
-!!$     enddo
-!!$  else
-  xDelt = (xMax-xMin)/dfloat(xNumPoints-1)
-  do i = 1,xNumPoints
-     xPoints(i) = (i-1)*xDelt + xMin
-  enddo
-  !  endif
+  if((OPGRID.eq.1)) then
+     Rscale = 2d0*Rstar/R
+!     write(6,*) "using modified grid:(R,Rstar,Rscale) = ", R, Rstar, Rscale
+     xDelt = (xMax-xMin)
+     a = exp(max(Rscale, 0.75d0))
+     do i = 1, xNumPoints
+        xPoints(i) = x0 + xDelt/gridshapef(a,1d0) * (gridshapef(a,dble(i-1d0)/dble(xNumPoints-1d0)))
+!        write(6,*) i, xPoints(i)
+     enddo
+  else
+     xDelt = (xMax-xMin)/dfloat(xNumPoints-1)
+     do i = 1,xNumPoints
+        xPoints(i) = (i-1)*xDelt + x0
+     enddo
+  endif
 
 
 !!$  !     Smooth Grid 

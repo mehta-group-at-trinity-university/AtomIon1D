@@ -92,6 +92,9 @@ program AtomIon1D
   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
   double precision, external :: ddot, kdelta
+
+  character(len=20), external :: str
+
   character*64 LegendreFile
   character*64 leftnrg
   common /Rvalue/ Rvalue      
@@ -231,6 +234,14 @@ program AtomIon1D
 
   call AllocateBasis(PB,2,2,Order, LegPoints, xNumPoints, NumStates)
   call AllocateBasis(CB,Left,Right,Order, LegPoints, xNumPoints, NumStates)
+!!$
+!!$  open(unit = 203, file = "AdiabaticEnergies-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat") 
+!!$  open(unit = 200, file = "DiabaticEnergies-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat") 
+!!$  open(unit = 101, file = "Pmat-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat")
+!!$  open(unit = 102, file = "QTilmat-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat")
+!!$  open(unit = 103, file = "QuickPMat-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat")
+!!$  open(unit = 104, file = "QuickEffV-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat")
+!!$  open(unit = 105, file = "VQmat-LR="//trim(str(Left))//"-"//trim(str(Right))//".dat")
 
   open(unit = 203, file = "AdiabaticEnergies.dat") 
   open(unit = 200, file = "DiabaticEnergies.dat") 
@@ -239,7 +250,7 @@ program AtomIon1D
   open(unit = 103, file = "QuickPMat.dat")
   open(unit = 104, file = "QuickEffV.dat")
   open(unit = 105, file = "VQmat.dat")
-  open(unit = 106, file = "QuickQtil.dat")
+
   allocate(Perm(NumStates,NumStates),ComposedPerm(NumStates,NumStates),AbsPerm(NumStates,NumStates))
 
   CB%Left = Left
@@ -254,8 +265,8 @@ program AtomIon1D
      endif
      NumStateInc=NumStates-NumFirst
 
-     xMin = theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
-     xMax = Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
+     xMin = 0d0   !theta_c + asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho)) !Based on fixed sNb
+     xMax = Pi/2d0  !Pi + theta_c - asin(dsqrt(mu/(1d0+mu**2))* sNb/R(iR)*(Rstar/lho))
 
      sbc = (lho/Rstar)*R(iR)*dsqrt((1d0 + mu**2)/mu)*SIN(xMin - theta_c)
      !print*, 'sbc using sbc = (lho/Rstar)*R(iR)*dsqrt((1+mu**2)/mu)*SIN(xMin - theta_c):', sbc
@@ -315,10 +326,10 @@ program AtomIon1D
      !-------- Couplings from the diabatized eigenstates -------------!
      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P(:,:,iR),QTil(:,:,iR),ncv)      
 
-     write(103,*) R(iR),(P(WriteChannels(WriteChannels(NumOutPutChannels-4)),WriteChannels(i),iR),i=1,NumOutputChannels)
+     write(103,*) R(iR),(P(WriteChannels(1),WriteChannels(i),iR),i=1,NumOutputChannels)
      write(104,*) R(iR),(AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
           + QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu),i=1,NumOutputChannels)
-     write(106,*) R(iR), (QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i=1, NumOutputChannels)
+
      !write(104,*) R(iR), (QTil(i,i,iR)*R(iR)**2, i=1,1)
      !write(104,*) R(iR), ((AllEnergies(i,iR)-(i-1d0+0.5d0))*2*mu*R(iR)**2, i=1,NumStates)
      !--------------------------------------------------------------------------!
@@ -331,7 +342,7 @@ program AtomIon1D
      endif
 
      call CPU_TIME(t2)
-     write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), xMin, xMax, (CB%Energies(i,1), i=1,5)
+     write(6,*) 'Remaining time (min): ', (t2-t1)*iR/60, R(iR), (CB%Energies(i,1), i=1,5)
 
   enddo
 
@@ -341,10 +352,10 @@ program AtomIon1D
      write(102,11) R(iR)
      write(105,11) R(iR)
      do i=1,NumOutputChannels
-        write(101,11) (P(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels)
-        write(102,11) (QTil(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels)
+        write(101,11) (P(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels) !Write P to Pmat.dat
+        write(102,11) (QTil(WriteChannels(i),WriteChannels(j),iR), j=1,NumOutputChannels) !Write Qtil to QTilmat.dat
         write(105,11) ((AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2))*kdelta(i,j) &
-             + QTil(WriteChannels(i),WriteChannels(j),iR)/(2d0*mu), j=1,NumOutputChannels)
+             + QTil(WriteChannels(i),WriteChannels(j),iR)/(2d0*mu), j=1,NumOutputChannels) !Write VQmat to VQmat.dat
      enddo
   enddo
   
@@ -453,7 +464,13 @@ subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,nc
         P(m,n) = -P(n,m)
      enddo
   enddo
-  QTil = -matmul(P,P) 
+  
+  QTil = -matmul(P,P)
+  !!  Try doubling to check if the delicate interference goes away
+  !P=2d0*P  !! Be sure to remove this after the check is complete!
+  !!
+
+  
 !!$      do i = 1, NumStates
 !!$         do j = 1, NumStates
 !!$            write(6,*) i,j,QTil(i,j)
@@ -942,10 +959,11 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
 
   do kx = 1,xNumPoints-1
      do lx = 1,LegPoints
-        xai = mu**(-0.5d0)*sinx(lx,kx) - (mu**0.5d0)*cosx(lx,kx) 
+        !xai = mu**(-0.5d0)*sinx(lx,kx) - (mu**0.5d0)*cosx(lx,kx) 
         XX(lx,kx) = cosx(lx,kx)**2
-        YY(lx,kx) = C4/(xai**4)
-        potvalue = -YY(lx,kx)/R**4 + 0.5d0*mu*R*R*XX(lx,kx)
+        !YY(lx,kx) = C4/(xai**4)
+        !potvalue = -YY(lx,kx)/R**4 + 0.5d0*mu*R*R*XX(lx,kx)
+        potvalue = 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
         CB%V(lx,kx) = alpha*potvalue
         !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
@@ -969,16 +987,16 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
               xTempS = xTempS + a*u(lx,kx,ixp)
               xTempT = xTempT + a*uxx(lx,kx,ixp) !KE operator !ket
               xTempVHO = xTempVHO + a*XX(lx,kx)*u(lx,kx,ixp) ! Matrix elements of cos^2(theta)
-              xTempVC4 = xTempVC4 + a*YY(lx,kx)*u(lx,kx,ixp) ! Matrix elements of C4/xia^4 (just the angular part)
+              !xTempVC4 = xTempVC4 + a*YY(lx,kx)*u(lx,kx,ixp) ! Matrix elements of C4/xia^4 (just the angular part)
               !xTempV = xTempV + a*Pot(lx,kx)*u(lx,kx,ixp) !PE operator ket
            enddo
            xT(ix,ixp) = xT(ix,ixp) + xTempT
            xS(ix,ixp) = xS(ix,ixp) + xTempS
            !xV(ix,ixp) = xV(ix,ixp) + xTempV
            xVHO(ix,ixp) = xVHO(ix,ixp) + xTempVHO 
-           xVC4(ix,ixp) = xVC4(ix,ixp) + xTempVC4
+           !xVC4(ix,ixp) = xVC4(ix,ixp) + xTempVC4
         enddo
-        xV(ix,ixp) = 0.5d0*mu*R*R*xVHO(ix,ixp) - R**(-4)*xVC4(ix,ixp)
+        xV(ix,ixp) = 0.5d0*mu*R*R*xVHO(ix,ixp) !- R**(-4)*xVC4(ix,ixp)
      enddo
   enddo
 
@@ -993,7 +1011,8 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
            NewRow = HalfBandWidth+1+Row-Col
            S(NewRow,Col) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-           D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           !D(NewRow,Col) = -2d0*m*xT(ix,ixp)/R + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) !+ (4d0/R**5)*xVC4(ix,ixp)
            !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
@@ -1075,9 +1094,10 @@ subroutine CalcHamiltonian(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
   do kx = 1,xNumPoints-1
      do lx = 1,LegPoints
 
-        rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))))
+!        rai = mu**(-0.5d0) * R*sinx(lx,kx) -  mu**0.5d0 * R*cosx(lx,kx) !dsqrt(mu/mu12)*R*dabs(sinai(lx,kx))))
 
-        potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
+        !       potvalue = -C4/rai**4 + 0.5d0*mu*(R*cosx(lx,kx))**2
+        potvalue = 0.5d0*mu*(R*cosx(lx,kx))**2
         Pot(lx,kx) = alpha*potvalue
         !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
      enddo
@@ -1312,27 +1332,27 @@ subroutine GridMakerIA(mu,mu12,theta_c,Rstar,R,sbc,xNumPoints,xMin,xMax,xPoints,
 
   Pi = 3.1415926535897932385d0
 
-!  x0 = xMin
+  x0 = xMin
 !  write(6,*) "making grid with"
 !  write(6,*) "xMin = ", xMin
 !  write(6,*) "xMax = ", xMax
   
 
-!!$  if((OPGRID.eq.1)) then
-!!$     Rscale = 2d0*Rstar/R
-!!$!     write(6,*) "using modified grid:(R,Rstar,Rscale) = ", R, Rstar, Rscale
-!!$     xDelt = (xMax-xMin)
-!!$     a = exp(max(Rscale, 0.75d0))
-!!$     do i = 1, xNumPoints
-!!$        xPoints(i) = x0 + xDelt/gridshapef(a,1d0) * (gridshapef(a,dble(i-1d0)/dble(xNumPoints-1d0)))
-!!$!        write(6,*) i, xPoints(i)
-!!$     enddo
-!!$  else
-  xDelt = (xMax-xMin)/dfloat(xNumPoints-1)
-  do i = 1,xNumPoints
-     xPoints(i) = (i-1)*xDelt + xMin
-  enddo
-  !  endif
+  if((OPGRID.eq.1)) then
+     Rscale = 2d0*Rstar/R
+!     write(6,*) "using modified grid:(R,Rstar,Rscale) = ", R, Rstar, Rscale
+     xDelt = (xMax-xMin)
+     a = exp(max(Rscale, 0.75d0))
+     do i = 1, xNumPoints
+        xPoints(i) = x0 + xDelt/gridshapef(a,1d0) * (gridshapef(a,dble(i-1d0)/dble(xNumPoints-1d0)))
+!        write(6,*) i, xPoints(i)
+     enddo
+  else
+     xDelt = (xMax-xMin)/dfloat(xNumPoints-1)
+     do i = 1,xNumPoints
+        xPoints(i) = (i-1)*xDelt + x0
+     enddo
+  endif
 
 
 !!$  !     Smooth Grid 
@@ -1719,3 +1739,10 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
   ENDIF
 
 END SUBROUTINE GridMaker
+
+character(len=20) function str(k)
+!   "Convert an integer to string."
+    integer, intent(in) :: k
+    write (str, *) k
+    str = adjustl(str)
+end function str

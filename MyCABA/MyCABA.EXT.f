@@ -1,10 +1,11 @@
 c234567890
       program CoupledAdiabaticBoxAvg
-      
+      implicit none
+      integer iband, iBox, iE, ic,ii,iR,is,ithresh,jj,kk,kl,ku,MatrixDim
       integer LegPoints,xNumPoints
       integer Order,ishift,NumRmatch,NumNewSectors
-      integer NumInpChannels,NumChannels,NumOpenChannels
-      integer NumOpenL, NumOpenR, NumTotStates,NumSectors
+      integer NumInpChannels,NumChannels,NumOpenChannels,NumSectorsTot
+      integer NumOpenL, NumOpenR, NumTotStates,NumSectors,NumOpen
       integer NumDataPoints,NumBoxes,NumE
       integer TotalAngMomentum
       integer, allocatable :: MEMap(:,:),NumberL(:),NumberR(:),NumSectorsBox(:)
@@ -28,7 +29,7 @@ c234567890
       integer, allocatable :: ipiv(:)
       double precision Tol,Einc
       double precision TotalMemory,ddot,Mass,kelvinPERau
-      double precision m1,m2,m3,ma,mi
+      double precision m1,m2,m3,ma,mi,muai
       double precision Energy,Einput,RMatch,RMatch1,f,fp,g,gp,Pi,Wronskian
       double precision, allocatable :: work(:), Egrid(:)
       double precision, allocatable :: xLeg(:),wLeg(:)
@@ -45,10 +46,10 @@ c234567890
       double precision, allocatable :: Tmatrix(:,:),Kmatrix(:,:)
       double precision, allocatable :: TmatrixAvg(:,:),KmatrixAvg(:,:)
 
-
       double precision, allocatable :: CrossSections(:,:)
       double precision, allocatable :: BoxAvgPartial(:,:)
-      double complex, allocatable :: Smatrix(:,:)
+      double complex, allocatable :: Smatrix(:,:), SmatrixAvg(:,:),SmatrixOld(:,:), TimeDelay(:,:)
+      double complex, allocatable :: Test(:,:)
       character*64 LegendreFile,SFile,HFile,PFile,QFile,FitFile
 
       double precision muK
@@ -59,7 +60,7 @@ c234567890
       double precision Ri,Rf,Xi,Xf,StepX,R(1:100000000)
       double precision Emin,Emax,wlenght,rstep,XP
       integer NPoints,npwave,NPointsW,NPS
-      double precision URmin,wlenghti,rstepi,dumb,ascat
+      double precision URmin,wlenghti,rstepi,dumb,ascat,phaseshift
       integer ncount,ndumb
       character*64 GridName
 
@@ -103,7 +104,10 @@ c     read in Gauss-Legendre info
       allocate(NumberL(NumBoxes),NumberR(NumBoxes))
       do i = 1,NumBoxes
          read(5,*) NumberL(i),NumberR(i)
-      enddo 
+      enddo
+c      write(6,*) "allocating SmatrixOld, and TimeDelay to be of size", NumberR(NumBoxes)
+      allocate(SmatrixOld(NumberR(NumBoxes),NumberR(NumBoxes)))
+      allocate(TimeDelay(NumberR(NumBoxes),NumberR(NumBoxes)))
       read(5,*)
       read(5,*)
       read(5,*)NumRmatch,NumNewSectors
@@ -112,7 +116,7 @@ c     allocate(leff(NumberL(NumBoxes)),Thresholds(NumberR(NumBoxes)))
       read(5,*)
       read(5,*)  
       do i = 1,NumberR(NumBoxes)
-         read(5,*)leff(i),Thresholds(i)
+         read(5,*) leff(i),Thresholds(i)
       enddo
       Emin = Emin + Thresholds(ithresh)  ! Emin and Emax are read in as collision energies, but should be absolute energies.
       Emax = Emax + Thresholds(ithresh)
@@ -179,16 +183,16 @@ c     301  format(100(e20.12,1x))
 
       read(5,*)
       read(5,*)
-      read(5,*)Ri,Rf
+      read(5,*) Ri, Rf
       read(5,*)
       read(5,*)
-      read(5,*)NPoints
+      read(5,*) NPoints
       read(5,*)
       read(5,*)
-      read(5,*)npwave
+      read(5,*) npwave
 
 c     RADIAL GRID
-
+      
       Xi = Ri**(1.0d0/3.0d0)
       Xf = WhereStart**(1.0d0/3.0d0)
       StepX = (Xf-Xi)/dfloat(NPoints-1)
@@ -230,49 +234,47 @@ c     RADIAL GRID
       enddo
 
 
-c     GridName = 'grid.used.data'
-c     open(unit=17,file=GridName)
-c     write(17,*)
-c     write(17,*)'----------------------'      
-c     write(17,1705)URmin
-c     write(17,1700)NumSectorsTot
-c     write(17,1704)NPoints,NPointsW
-c     write(17,1701)wlenghti,wlenght
-c     write(17,1703)rstepi,rstep
-c     write(17,1702)npwave
-c     write(17,*)'----------------------'      
-c     do k = 1,NumBoxes
-c     write(17,171)k,NumSectorsBox(k)   
-c     enddo
-c     write(17,*)'----------------------'      
-c     do iR = 1,NumSectorsTot
-c     write(17,*)iR,xSectorTot(iR)
-c     enddo
-c     write(17,*)'----------------------'      
-c     close(17)
-c     
-c     1700 format(1x,'NumSectorsTot =',I8)
-c     1701 format(1x,'Wave Lenght =',f14.8',',f14.8)
-c     1702 format(1x,'Num. Points per Wave Lenght =',I3)
-c     1703 format(1x,'Step =',f14.8',',f14.8)
-c     1704 format(1x,'NPoints =',I6,',',I6)
-c     1705 format(1x,'Potential Minimum =',f14.8)
-c     171  format(1x,'Box(',I3,')=',I8)
+      GridName = 'grid.used.data'
+      open(unit=17,file=GridName)
+      write(17,*)
+      write(17,*)'----------------------'      
+      write(17,1705)URmin
+      write(17,1700)NumSectorsTot
+      write(17,1704)NPoints,NPointsW
+      write(17,1701)wlenghti,wlenght
+      write(17,1703)rstepi,rstep
+      write(17,1702)npwave
+      write(17,*)'----------------------'      
+      do k = 1,NumBoxes
+      write(17,171)k,NumSectorsBox(k)   
+      enddo
+      write(17,*)'----------------------'      
+      do iR = 1,NumSectorsTot
+      write(17,*)iR,xSectorTot(iR)
+      enddo
+      write(17,*)'----------------------'      
+      close(17)
+
+ 1700 format(1x,'NumSectorsTot =',I8)
+ 1701 format(1x,'Wave Lenght =',f14.8',',f14.8)
+ 1702 format(1x,'Num. Points per Wave Lenght =',I3)
+ 1703 format(1x,'Step =',f14.8',',f14.8)
+ 1704 format(1x,'NPoints =',I6,',',I6)
+ 1705 format(1x,'Potential Minimum =',f14.8)
+ 171  format(1x,'Box(',I3,')=',I8)
 
 c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
       allocate(xLeg(LegPoints),wLeg(LegPoints))
       call GetGaussFactors(LegendreFile,LegPoints,xLeg,wLeg)
       
-      goto 54 
-      
- 54   allocate(VQExponents(Numchannels,Numchannels,3))
+      allocate(VQExponents(Numchannels,Numchannels,3))
       allocate(VQFit(Numchannels,Numchannels,3))
       allocate(PExponents(Numchannels,Numchannels,3))
       allocate(PFit(Numchannels,Numchannels,3))
       
       open(18,file=FitFile,status='old') ! Contains fit parameters for VQ and for P?
-      read(18,*)NumTotStates,NumDataPoints
+      read(18,*) NumTotStates,NumDataPoints
       rmsErrorMax=0.d0
       rmsErrorPMax=0.d0
       do j=1,NumChannels
@@ -338,6 +340,10 @@ c     enddo
      >     PFile,QFile,xdata,VQmat,Pmat) ! read in the P, VQ matrix data to be interpolated later 
 
 
+      open(unit = 25, file = "Observables.dat")
+      open(unit = 26, file = "Kmatrix.dat")
+      open(unit = 27, file = "Smatrix.dat")
+      open(unit = 28, file = "TimeDelay.dat")
       
       do ie=1,NumE
          energy = Egrid(iE)
@@ -346,7 +352,7 @@ c     This condition is valid for the relaxation problem.
 c     It means that for energy.gt.Thresholds(ithresh+1) a 
 c     new channel will be open. So, re-edit the input file 
 c     to include those channels.
-
+         
          ishift = 0
          do ibox = 1,NumBoxes-1
 
@@ -366,7 +372,7 @@ c     to include those channels.
             enddo
             Rstart = xSector(1)
             Rmatch = xSector(NumSectors+1)
-
+            
 !     write(6,*)'Adiabatic Box:         ',ibox
 !     write(6,*)'Box Boundaries:        ',Rstart,Rmatch
 !     write(6,*)'NumOpenChannels Left:  ',NumOpenL
@@ -462,15 +468,22 @@ c     starting matching section
             endif
 
          enddo
-
+c         NumOpenR = NumberR(NumBoxes) ! Added this 5/28/2024 NPM
+         
+c         write(6,*) "allocating SmatrixAvg to be of size ", NumOpenR
          allocate(BoxAvgPartial(NumberR(NumBoxes),NumberR(NumBoxes)))
          allocate(TmatrixAvg(NumOpenR,NumOpenR))
          allocate(KmatrixAvg(NumOpenR,NumOpenR))
+         allocate(SmatrixAvg(NumOpenR,NumOpenR))
+         allocate(test(NumOpenR,NumOpenR))
+         
          BoxAvg = 0.0d0
          BoxAvgPartial = 0.0d0
          TmatrixAvg = 0.0d0
          KmatrixAvg = 0.0d0
-
+         SmatrixAvg = 0d0
+         TimeDelay = 0d0
+         ! Now do the final box, averaging over the NumRmatch sectors.
          do ir=1,NumRmatch
 
             NumSectors = NumSectorsBox(NumBoxes) + (ir-1)*NumNewSectors
@@ -490,10 +503,10 @@ c     allocate(xSector(NumSectors+1))
 c     do is=1,NumSectors+1
 c     xSector(is) = xSectorTot(NumSectorsTot) +0.1d0*(is-1) +1.d0*(ir-1)
 c     enddo 
-c     Rstart = xSector(1)
-c     Rmatch = xSector(NumSectors+1)
+c      Rstart = xSector(1)
+c      Rmatch = xSector(NumSectors+1)
 
-c     write(*,*)ir,NumSectors,NumBoxes,Rmatch
+c      write(*,*)ir,NumSectors,NumBoxes,Rmatch
 
             NumOpenL = NumberL(NumBoxes)
             NumOpenR = NumberR(NumBoxes)
@@ -503,14 +516,14 @@ c     write(*,*)ir,NumSectors,NumBoxes,Rmatch
             ku = kl
             iband = 3*kl + 1
 
-!     write(6,*)'Adiabatic Box:         ',NumBoxes
-!     write(6,*)'Box Boundaries:        ',Rstart,Rmatch
-!     write(6,*)'NumOpenChannels Left:  ',NumOpenL
-!     write(6,*)'NumOpenChannels Right: ',NumOpenR
-!     write(6,*)'OpenMatrixDim:         ',NumOpen
-!     write(6,*)'ClosedMatrixDim:       ',MatrixDim
-!     write(6,*)'HalfBandwidth:         ',kl
-!     write(6,*) 
+c$$$      write(6,*)'Adiabatic Box:         ',NumBoxes
+c$$$      write(6,*)'Box Boundaries:        ',Rstart,Rmatch
+c$$$      write(6,*)'NumOpenChannels Left:  ',NumOpenL
+c$$$      write(6,*)'NumOpenChannels Right: ',NumOpenR
+c$$$      write(6,*)'OpenMatrixDim:         ',NumOpen
+c$$$      write(6,*)'ClosedMatrixDim:       ',MatrixDim
+c$$$      write(6,*)'HalfBandwidth:         ',kl
+c$$$      write(6,*) 
 
             
             allocate(MEMap(Numchannels*NumSectors,6))
@@ -575,6 +588,7 @@ c     calculate S-matrix and scattering cross sections
 c     CrossSections is actually the K_3 (or VR) rate constant
 
             allocate(Smatrix(NumOpenR,NumOpenR),Tmatrix(NumOpenR,NumOpenR),Kmatrix(NumOpenR,NumOpenR))
+
             allocate(CrossSections(NumOpenR,NumOpenR))
 
 c            call CalcSmatrix(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
@@ -585,18 +599,19 @@ c     >           solution,deriv,Smatrix,Tmatrix,CrossSections)
             do i = 1,NumOpenR
                do j = 1,NumOpenR
                   BoxAvgPartial(i,j) = BoxAvgPartial(i,j) + CrossSections(i,j)
+                  SmatrixAvg(i,j) = SmatrixAvg(i,j) + Smatrix(i,j)
                   TmatrixAvg(i,j) = TmatrixAvg(i,j) + Tmatrix(i,j)
                   KmatrixAvg(i,j) = KmatrixAvg(i,j) + Kmatrix(i,j)
                enddo
             enddo
-
+            
 c     Recombination Rate
-            Crosstot = 0.0d0
-            do i=1,ithresh-1
-               do j=ithresh,NumOpenR
-                  Crosstot = Crosstot + CrossSections(i,j)  !NOT MEANINGFULL CURRENTLY SINCE CROSSSECTIONS IS JUST THE 1D K-Matrix
-               enddo
-            enddo
+c            Crosstot = 0.0d0
+c            do i=1,ithresh-1
+c               do j=ithresh,NumOpenR
+c                  Crosstot = Crosstot + CrossSections(i,j)  !NOT MEANINGFULL CURRENTLY SINCE CROSSSECTIONS IS JUST THE 1D K-Matrix
+c               enddo
+c            enddo
 
 c     c     Relaxation Rate 
 c     Crosstot = 0.0d0
@@ -607,34 +622,58 @@ c     enddo
 c     enddo
 
 
-c     do ic=1,ithresh-1
-c     Crosstot = Crosstot + CrossSections(ic,ithresh)
-c     enddo
+            do ic=1,ithresh-1
+               Crosstot = Crosstot + CrossSections(ic,ithresh)
+            enddo
             Boxavg = Boxavg + Crosstot
-
+            
 !     write(6,*)'Rate Constant K_3(cm^6/sec)'
 !     write(6,*) Crosstot
-
+            
 c     write(29+NumE,28)Rmatch,Crosstot,CrossSections(1:ithresh-1,ithresh)
 c     write(*,20)(energy-Thresholds(ithresh))/muK,1.d0*ir,((CrossSections(i,j),j=1,NumOpenR),i=1,NumOpenR)
-
+            
             deallocate (Smatrix,Tmatrix,CrossSections,Kmatrix)
             deallocate(solution,deriv)
-
+            
          enddo
-
+         
 !     write(6,*)'Done'
          do i = 1,NumberR(NumBoxes)
             do j = 1,NumberR(NumBoxes)
                BoxAvgPartial(i,j) = BoxAvgPartial(i,j)/dfloat(NumRmatch)
+               SmatrixAvg(i,j) = SmatrixAvg(i,j)/dfloat(NumRmatch)
                TmatrixAvg(i,j) = TmatrixAvg(i,j)/dfloat(NumRmatch)
                KmatrixAvg(i,j) = KmatrixAvg(i,j)/dfloat(NumRmatch)
             enddo
          enddo
-
-c         do ic = 1,ithresh-1
+         
+         Timedelay = (0d0,0d0)
+         if(iE.gt.1) then
+c     write(6,*) "NumOpenR = ", NumOpenR
+c     write(6,*) Timedelay
+c     write(6,*) "------------------"
+c     write(6,*) (Egrid(iE)-Egrid(iE-1))
+c     write(6,*) "------------------"
+            Timedelay = (SmatrixAvg - SmatrixOld)/(Egrid(iE)-Egrid(iE-1))            
+            call zgemm('N', 'C', NumOpenR, NumOpenR, NumOpenR, -(0d0,1d0), SmatrixAvg,
+     .           NumOpenR, TimeDelay, NumOpenR, (0d0,0d0), TimeDelay, NumOpenR)
+            do i = 1, NumOpenR
+               do j = 1, NumOpenR
+                  test(i,j) = 0.5d0*(TimeDelay(i,j) + conjg(TimeDelay(j,i)))
+               enddo
+            enddo
+            TimeDelay = test
+            
+c            call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), SmatrixOld,
+c     .           NumOpenR, SmatrixOld, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
+c     write(6,*) test
+c            call zprintmatrix(test,NumOpenR,NumOpenR,6)
+         endif
+         SmatrixOld = SmatrixAvg
+c     do ic = 1,ithresh-1
 c     Partial Vibrational Relaxation Rate
-c            write(9+ic,20)(energy-Thresholds(ithresh))/muK,(BoxAvgPartial(ic,j),j=ithresh,ithresh) 
+c     write(9+ic,20)(energy-Thresholds(ithresh))/muK,(BoxAvgPartial(ic,j),j=ithresh,ithresh) 
 c     Partial Recombination Rate
 c     write(9+ic,20)(energy-Thresholds(ithresh))/muK,BoxAvgPartial(ic,ithresh:NumberR(NumBoxes))
 c         enddo
@@ -644,7 +683,8 @@ c         enddo
 !     write(6,*)'Box average results'
 !     write(6,*)BoxAvg
 c     write(25,*)energy/3.165226467522434d-12,BoxAvg
-c         write(25,*)(energy-Thresholds(ithresh))/muK,BoxAvg
+c     write(25,*)(energy-Thresholds(ithresh))/muK,BoxAvg
+c         write(25,*) (energy-Thresholds(ithresh)),BoxAvg
 
 c     Tmatrix outPut      
 c         write(1000,20)(energy-Thresholds(ithresh))/muK,((TmatrixAvg(i,j),j=1,NumOpenR),i=1,NumOpenR)
@@ -655,23 +695,22 @@ c     write(*,20)(energy-Thresholds(ithresh))/muK,
 c     .           ((BoxAvgPartial(i,j),j=ithresh,ithresh),i=1,ithresh-1),BoxAvg,timep-secp
 c         write(*,20)(energy-Thresholds(ithresh))/muK,BoxAvg,
 c     .        ((BoxAvgPartial(i,j),j=ithresh,NumOpenR),i=1,ithresh-1),timep-secp
-         ascat = 1/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh))
-         write(6,*)(energy-Thresholds(ithresh)), ascat, timep-secp
-         write(25,*)(energy-Thresholds(ithresh)), ascat, timep-secp
+c         ascat = 1/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh))
+         ascat = -KmatrixAvg(ithresh,ithresh)/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh))))
+         phaseshift = atan(KmatrixAvg(ithresh,ithresh))
 
+         write(6,21) 'min. to go = ',((timep-secp)*float(NumE-iE))/(60d0), (energy-Thresholds(ithresh)), ascat, phaseshift,
+     .        BoxAvgPartial(1,1)     
+         write(25,20) (energy-Thresholds(ithresh)), ascat, phaseshift, sin(phaseshift)**2,sin(phaseshift - 0.5d0*Pi)**2, BoxAvgPartial(1,1)
+         write(26,20) energy, (Thresholds(i), i = 1, NumOpenR), ((KmatrixAvg(i,j), i=1,NumOpenR), j=1,NumOpenR)
+         write(27,20) energy, (Thresholds(i), i = 1, NumOpenR), ((SmatrixAvg(i,j), i=1,NumOpenR), j=1,NumOpenR)
+         write(28,20) energy, (Thresholds(i), i = 1, NumOpenR), ((TimeDelay(i,j), i=1,NumOpenR), j=1,NumOpenR)
 
          call cpu_time(timep)
          secp = timep 
 
-         deallocate(BoxAvgPartial,TmatrixAvg,KmatrixAvg)
+         deallocate(BoxAvgPartial,TmatrixAvg,KmatrixAvg,SmatrixAvg,test)
          deallocate(psi_in,b)
-
-c     energy = Einput + float(ie)*Einc + Thresholds(ithresh)
-c     energy = Einput*(10.d0**(float(ie)*0.1d0)) 
-         
-c         EinputAux = Einput*(10.d0**(float(ie)*0.1d0)) 
-c         energy = (EinputAux+Thresholds(ithresh))
-         
 
       enddo
 
@@ -682,6 +721,7 @@ c         energy = (EinputAux+Thresholds(ithresh))
       deallocate(xLeg,wLeg)
 
  20   format(1P,100e16.8)
+ 21   format(a13,f5.2,100e16.8)
  28   format(f10.2,1P,100e14.5)
  407  format(10(e16.8,1x))
  1002 format(a64)
@@ -2036,7 +2076,18 @@ C---------- Last line of RYBESL ----------
        enddo
       enddo
 
-
+c      zero the couplings to see what happens
+c$$$      do k = 1, NumDataPoints
+c$$$         do i = 1, NumChannels
+c$$$            do j = 1, NumChannels
+c$$$               if(i.ne.j) then
+c$$$                  Pmat(k,i,j) = 0d0
+c$$$                  VQmat(k,i,j) = 0d0
+c$$$               endif
+c$$$            enddo
+c$$$         enddo
+c$$$      enddo
+                  
 cc      XXX
 c       do i = 1,NumDataPoints
 c       do j = 1,NumChannels
@@ -2128,7 +2179,7 @@ c     3001 format(100(e20.12,1x))
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       subroutine BasicKineticMatrix(BasicT)
 
-c -1/2 factor is included
+c -1/2 factor is included:  this is (-1/2)* \int_{-1}^{1}{ui(x) uj''(x)}
 
       double precision BasicT(6,6)
 
@@ -2222,9 +2273,10 @@ c form matrix element map
       double precision xdata(NumDataPoints),ydata(NumDataPoints)
 
       double precision PFit(Numchannels,Numchannels,3),VQFit(Numchannels,Numchannels,3)
-      double precision WhereStart,vvj,ppj
+      double precision WhereStart,vvj,ppj,psign
       double precision PExponents(Numchannels,Numchannels,3)
       double precision VQExponents(Numchannels,Numchannels,3)
+      double precision, external :: AsymptoticP, AsymptoticVQ
 
       call BasicKineticMatrix(BasicT)
 
@@ -2248,136 +2300,145 @@ c index one sector at a time
        ScaledZero = (xSector(n+1)+xSector(n))/2.0d0
 
        do nc = 1,Numchannels
+          
+c     integrate potentials in each block
+          
+          do jc = 1,Numchannels
+             psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
+c             write(6,*) "psign = ", psign
+             do ik=1,NumDataPoints
+                ydata(ik)=VQmat(ik,nc,jc)
+             enddo
+             
+             do j = 1,LegPoints
+                x(j) = IntScale*xLeg(j)+ScaledZero
+                
+                IF(x(j) .ge. WhereStart) THEN
+                   
+c-----------------------------------------------------------------------
+c     comment out this original section in favor of exact asymptotic forms
+                   vvj=VQFit(nc,jc,1)/x(j)**VQExponents(nc,jc,1)
+                   vvj=vvj+VQFit(nc,jc,2)/x(j)**VQExponents(nc,jc,2)
+                   vvj=vvj+VQFit(nc,jc,3)/x(j)**VQExponents(nc,jc,3)
+                   VQInterp(j)=vvj
+                   
+                   ppj=PFit(nc,jc,1)/x(j)**PExponents(nc,jc,1)
+                   ppj=ppj+PFit(nc,jc,2)/x(j)**PExponents(nc,jc,2)
+                   ppj=ppj+PFit(nc,jc,3)/x(j)**PExponents(nc,jc,3)
+                   PInterp(j)=ppj
+                   
+c     Exact asymptotic forms here:
+c$$$                   vvj = AsymptoticVQ(Mass,nc,jc,x(j))
+c$$$                   VQInterp(j) = vvj
+c$$$                   ppj = AsymptoticP(nc,jc,x(j))
+c$$$                   PInterp(j) = ppj*psign
+c-----------------------------------------------------------------------
+                endif
+             enddo
+             
+             IF(x(1) .LT. WhereStart) THEN
+                call Akima(NumDataPoints,xdata,ydata,LegPoints,x,VQInterp)
+             ENDIF
+             
+c     c       Filtering noise (jpdincao)
+c     do j = 1,LegPoints
+c     if (dabs(VQInterp(j)).le.1.d-14) VQInterp(j) = 0.d0 !sign(1.d-14,VQInterp(j))
+c     enddo
+             
+c     c       Cutoff Long-range Q-coupling (jpdincao)
+c     if (nc.eq.1.or.nc.eq.3) then
+c     if (jc.eq.1.or.jc.eq.3) then
+c     do j = 1,LegPoints
+c     if (x(j).ge.WhereStart) VQInterp(j) = 0.d0 
+c     enddo
+c     endif
+c     endif
+             
+             do i = 1,6
+                do ip = 1,6
+                   BasicVQ(i,ip) = 0.0d0
+                   do j = 1,LegPoints
+                      BasicVQ(i,ip) = BasicVQ(i,ip) + wLeg(j)*u(i,j)*VQInterp(j)*u(ip,j)
+                   enddo
+                enddo
+             enddo
+             
+             do ik=1,NumDataPoints
+                ydata(ik)=Pmat(ik,nc,jc)
+             enddo
+             
+             IF(x(1) .LT. WhereStart) THEN
+                call akima(NumDataPoints,xdata,ydata,LegPoints,x,Pinterp)
+             ENDIF
+             
+c     c       Filtering noise (jpdincao)
+c     do j = 1,LegPoints
+c     if (dabs(PInterp(j)).le.1.d-14) PInterp(j) = 0.d0 !sign(1.d-14,PInterp(j))
+c     enddo   
 
-c integrate potentials in each block
-
-        do jc = 1,Numchannels
-
-        do ik=1,NumDataPoints
-         ydata(ik)=VQmat(ik,nc,jc)
-        enddo
-
-        do j = 1,LegPoints
-         x(j) = IntScale*xLeg(j)+ScaledZero
-
-        IF(x(j) .ge. WhereStart) THEN
-
-	   vvj=VQFit(nc,jc,1)/x(j)**VQExponents(nc,jc,1)
-	   vvj=vvj+VQFit(nc,jc,2)/x(j)**VQExponents(nc,jc,2)
-	   vvj=vvj+VQFit(nc,jc,3)/x(j)**VQExponents(nc,jc,3)
-	   VQInterp(j)=vvj
-
-	   ppj=PFit(nc,jc,1)/x(j)**PExponents(nc,jc,1)
-	   ppj=ppj+PFit(nc,jc,2)/x(j)**PExponents(nc,jc,2)
-	   ppj=ppj+PFit(nc,jc,3)/x(j)**PExponents(nc,jc,3)
-	   PInterp(j)=ppj
-
-         endif
-        enddo
-
-	IF(x(1) .LT. WhereStart) THEN
-         call Akima(NumDataPoints,xdata,ydata,LegPoints,x,VQInterp)
-	ENDIF
-
-cc       Filtering noise (jpdincao)
-c        do j = 1,LegPoints
-c           if (dabs(VQInterp(j)).le.1.d-14) VQInterp(j) = 0.d0 !sign(1.d-14,VQInterp(j))
-c        enddo
-
-cc       Cutoff Long-range Q-coupling (jpdincao)
-c        if (nc.eq.1.or.nc.eq.3) then
-c        if (jc.eq.1.or.jc.eq.3) then
-c        do j = 1,LegPoints
-c           if (x(j).ge.WhereStart) VQInterp(j) = 0.d0 
-c        enddo
-c        endif
-c        endif
-
-       do i = 1,6
-        do ip = 1,6
-         BasicVQ(i,ip) = 0.0d0
-         do j = 1,LegPoints
-          BasicVQ(i,ip) = BasicVQ(i,ip) + wLeg(j)*u(i,j)*VQInterp(j)*u(ip,j)
-         enddo
-        enddo
-       enddo
-
-       do ik=1,NumDataPoints
-        ydata(ik)=Pmat(ik,nc,jc)
-       enddo
-       
-       IF(x(1) .LT. WhereStart) THEN
-        call akima(NumDataPoints,xdata,ydata,LegPoints,x,Pinterp)
-       ENDIF
-
-cc       Filtering noise (jpdincao)
-c        do j = 1,LegPoints
-c           if (dabs(PInterp(j)).le.1.d-14) PInterp(j) = 0.d0 !sign(1.d-14,PInterp(j))
-c        enddo   
-
-cc       Cutoff Long-range P-coupling (jpdincao)
-c        if (nc.eq.1.or.nc.eq.3) then
-c        if (jc.eq.1.or.jc.eq.3) then
-c        do j = 1,LegPoints
+c     c       Cutoff Long-range P-coupling (jpdincao)
+c     if (nc.eq.1.or.nc.eq.3) then
+c     if (jc.eq.1.or.jc.eq.3) then
+c     do j = 1,LegPoints
 c           if (x(j).ge.WhereStart) PInterp(j) = 0.d0 
 c        enddo
 c        endif
 c        endif
 
-       do i = 1,6
-        do ip = 1,6
-         BasicP(i,ip) = 0.0d0
-         do j = 1,LegPoints
-          BasicP(i,ip) = BasicP(i,ip) + wLeg(j)*PInterp(j)*
-     >        (u(i,j)*up(ip,j) - up(i,j)*u(ip,j))
-         enddo
-        enddo
+             do i = 1,6
+                do ip = 1,6
+                   BasicP(i,ip) = 0.0d0
+                   do j = 1,LegPoints
+                      BasicP(i,ip) = BasicP(i,ip) + wLeg(j)*PInterp(j)*
+     >                     (u(i,j)*up(ip,j) - up(i,j)*u(ip,j))
+                   enddo
+                enddo
+             enddo
+             
+             if (n .ne. 1) then
+                Scale(2) = (xSector(n+1)-xSector(n))/(xSector(n)-xSector(n-1))
+             else
+                Scale(2) = 1.0d0
+             endif
+             
+             do i = 1,6
+                do ip = 1,6
+                   
+                   if ((MEMap(knc,i) .ne. 0) .AND. (MEMap(kjc,ip) .ne. 0)) then
+                      
+                      imap = MEMap(knc,i)
+                      jmap = MEMap(kjc,ip)
+                      
+                      if (knc .eq. kjc)then
+                         
+c     diagonal blocks
+                         
+                         Gcc(kb+imap-jmap,jmap) = Gcc(kb+imap-jmap,jmap) + 
+     >                        2.0d0*mass*Scale(i)*Scale(ip)*
+     >                        (energy*Intscale*BasicS(i,ip) -
+     >                        (BasicT(i,ip)/(Mass*IntScale)+BasicVQ(i,ip)*IntScale
+     >                        + BasicP(i,ip)))
+                         
+                      else 
+                         
+c     off-diagonal blocks
+                         
+                         Gcc(kb+imap-jmap,jmap) = Gcc(kb+imap-jmap,jmap) - 
+     >                        2.0d0*mass*Scale(i)*Scale(ip)*(BasicVQ(i,ip)*IntScale
+     >                        + BasicP(i,ip))
+                         
+                      endif
+                   endif
+                enddo
+             enddo
+             
+             kjc = kjc + 1
+          enddo
+          
+          kjc = Numchannels*(n-1) + 1
+          knc = knc + 1
        enddo
-
-       if (n .ne. 1) then
-        Scale(2) = (xSector(n+1)-xSector(n))/(xSector(n)-xSector(n-1))
-       else
-        Scale(2) = 1.0d0
-       endif
-
-       do i = 1,6
-        do ip = 1,6
-
-        if ((MEMap(knc,i) .ne. 0) .AND. (MEMap(kjc,ip) .ne. 0)) then
-
-         imap = MEMap(knc,i)
-         jmap = MEMap(kjc,ip)
-
-         if (knc .eq. kjc)then
-
-c diagonal blocks
-
-         Gcc(kb+imap-jmap,jmap) = Gcc(kb+imap-jmap,jmap) + 
-     >         2.0d0*mass*Scale(i)*Scale(ip)*
-     >        (energy*Intscale*BasicS(i,ip) -
-     >        (BasicT(i,ip)/(Mass*IntScale)+BasicVQ(i,ip)*IntScale
-     >         + BasicP(i,ip)))
-
-          else 
-
-c off-diagonal blocks
-
-         Gcc(kb+imap-jmap,jmap) = Gcc(kb+imap-jmap,jmap) - 
-     >        2.0d0*mass*Scale(i)*Scale(ip)*(BasicVQ(i,ip)*IntScale
-     >        + BasicP(i,ip))
-
-          endif
-         endif
-        enddo
-       enddo
-
-        kjc = kjc + 1
-        enddo
-
-        kjc = Numchannels*(n-1) + 1
-        knc = knc + 1
-       enddo
-
+       
        knc = Numchannels*n + 1
        kjc = knc
       enddo
@@ -2454,10 +2515,11 @@ c       upp(6,n) =  -0.5d0 - 1.5d0*x + 3.0d0*x2 + 5.0d0*x3
       double precision ydata(NumDataPoints)
 
       double precision PFit(NumChannels,NumChannels,3),VQFit(NumChannels,NumChannels,3)
-      double precision WhereStart,vvj,ppj,Dpj	
+      double precision WhereStart,vvj,ppj,Dpj,psign
       double precision PExponents(NumChannels,NumChannels,3)
       double precision VQExponents(NumChannels,NumChannels,3)
-
+      double precision, external :: AsymptoticP, AsymptoticVQ
+      
       call BasicKineticMatrix(BasicT)
 
       call CalcLocalBasis(LegPoints,xLeg,u,up)
@@ -2475,40 +2537,47 @@ c open channels on left boundary
 
       ip = 1
       n  = 1
-
+      
       do nc = 1,NumOpenL
-        IntScale = (xSector(n+1)-xSector(n))/2.0d0
-        ScaledZero = (xSector(n+1)+xSector(n))/2.0d0
-
-c integrate potentials in each block
-
-        do jc = 1,NumChannels
-
-        do ik=1,NumDataPoints
-         ydata(ik) = VQmat(ik,nc,jc)
-        enddo
-
-        do j = 1,LegPoints
-           x(j) = IntScale*xLeg(j)+ScaledZero
-
-	   vvj=VQFit(nc,jc,1)/x(j)**VQExponents(nc,jc,1)
-	   vvj=vvj+VQFit(nc,jc,2)/x(j)**VQExponents(nc,jc,2)
-	   vvj=vvj+VQFit(nc,jc,3)/x(j)**VQExponents(nc,jc,3)
-	   VQInterp(j)=vvj
-
-	   ppj=PFit(nc,jc,1)/x(j)**PExponents(nc,jc,1)
-	   ppj=ppj+PFit(nc,jc,2)/x(j)**PExponents(nc,jc,2)
-	   ppj=ppj+PFit(nc,jc,3)/x(j)**PExponents(nc,jc,3)
-	   PInterp(j)=ppj
-
-        enddo
-
-	 IF(x(1) .LT. WhereStart) THEN
-         call Akima(NumDataPoints,xdata,ydata,LegPoints,x,VQInterp)  ! do the interpolation for this particular matrix element only (nc,jc)? (npmehta)
-	 ENDIF
-
-cc       Filtering noise (jpdincao)
-c        do j = 1,LegPoints
+         IntScale = (xSector(n+1)-xSector(n))/2.0d0 ! a_n in Burke's thesis
+         ScaledZero = (xSector(n+1)+xSector(n))/2.0d0 ! d_n in Burke's thesis
+         
+c     integrate potentials in each block
+         
+         do jc = 1,NumChannels
+            psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
+            do ik=1,NumDataPoints
+               ydata(ik) = VQmat(ik,nc,jc)
+            enddo
+            
+            do j = 1,LegPoints
+               x(j) = IntScale*xLeg(j)+ScaledZero
+               
+c-----------------------------------------------------------------------
+c     comment out this original section in favor of exact asymptotic forms
+               vvj=VQFit(nc,jc,1)/x(j)**VQExponents(nc,jc,1)
+               vvj=vvj+VQFit(nc,jc,2)/x(j)**VQExponents(nc,jc,2)
+               vvj=vvj+VQFit(nc,jc,3)/x(j)**VQExponents(nc,jc,3)
+               VQInterp(j)=vvj
+               
+               ppj=PFit(nc,jc,1)/x(j)**PExponents(nc,jc,1)
+               ppj=ppj+PFit(nc,jc,2)/x(j)**PExponents(nc,jc,2)
+               ppj=ppj+PFit(nc,jc,3)/x(j)**PExponents(nc,jc,3)
+               PInterp(j)=ppj
+c$$$c     Exact asymptotic forms:
+c$$$               vvj = AsymptoticVQ(Mass,nc,jc,x(j))
+c$$$               VQInterp(j) = vvj
+c$$$               ppj = AsymptoticP(nc,jc,x(j))
+c$$$               PInterp(j) = ppj*psign
+               
+            enddo
+            ! If x < WhereStart, then just interpolate the known points instead of using the extrapolation fits.
+            IF(x(1) .LT. WhereStart) THEN
+               call Akima(NumDataPoints,xdata,ydata,LegPoints,x,VQInterp) ! do the interpolation for this particular matrix element only (nc,jc)? (npmehta)
+            ENDIF
+            
+c     c       Filtering noise (jpdincao)
+c     do j = 1,LegPoints
 c           if (dabs(VQInterp(j)).le.1.d-14) VQInterp(j) = 0.d0 !sign(1.d-14,VQInterp(j))
 c        enddo   
 
@@ -2521,7 +2590,7 @@ c        enddo
 c        endif
 c        endif
 
-       do i = 1,6
+        do i = 1,6
          BasicVQ(i,ip) = 0.0d0
          do j = 1,LegPoints
           BasicVQ(i,ip) = BasicVQ(i,ip) + wLeg(j)*u(i,j)*VQInterp(j)*u(ip,j)
@@ -2855,18 +2924,27 @@ c-------------------------------------------------------------------------------
          
 c     call BesselBasePair(kVector(i),RMatch,leff(i),f,fp,g,gp)
          
-         x = kVector(i)*Rmatch
+
 C     In 1D we switch the roles of f and g so look carefully at the argument order of the following call
 c     Note that leff(i) should be zero for all two-body channels in 1D.
 c     Make sure this is the case in the input file
-         call sphbes(leff(i),x,g,f,gp,fp)
+c$$$         x = kVector(i)*Rmatch
+c$$$         call sphbes(leff(i),x,g,f,gp,fp)
 c     Now g ~ sin(kx) and f ~ -cos(kx) so we'll need to multiply f by a negative sign.         
-         fp = -enorm(i)*(f + x*fp)
-         f = -enorm(i)*Rmatch*f
-         gp = enorm(i)*(g + x*gp)
-         g = enorm(i)*Rmatch*g
+c$$$         fp = -enorm(i)*(f + x*fp)
+c$$$         f = -enorm(i)*Rmatch*f
+c$$$         gp = enorm(i)*(g + x*gp)
+c$$$         g = enorm(i)*Rmatch*g
+
+          x = kVector(i)*Rmatch
+          call sphbes(leff(i),x,f,g,fp,gp)
+          fp = enorm(i)*(f + x*fp)
+          f = enorm(i)*Rmatch*f
+          gp = enorm(i)*(g + x*gp)
+          g = enorm(i)*Rmatch*g
          
-         Wronskian = 1.0d0/(g*fp-gp*f)
+          Wronskian = 1.0d0/(g*fp-gp*f)
+     
 !write(6,*) 'Wronskian check:    ',2.0d0*Wronskian/Pi
  36      format(5(e12.6,1x))
          
@@ -2903,9 +2981,10 @@ c     calculate S-matrix
  
        call zgesv(NumOpenR,NumOpenR,IJMat,NumOpenR,ipiv,Smatrix,NumOpenR,info)
 
-       do i = 1,NumOpenR
-        Smatrix(i,i) = Smatrix(i,i) - (1.0d0,0.0d0)
-       enddo
+c     Subtract 1 from the diagonal elements
+c       do i = 1,NumOpenR
+c        Smatrix(i,i) = Smatrix(i,i) - (1.0d0,0.0d0)
+c       enddo
 
 c     calculate T-matrix
 
@@ -2927,12 +3006,12 @@ c     calculate T-matrix
 c i -> final state
 c j -> initial state
 c       CrossSections = Kmat
-!       do i = 1,NumOpenR
-!          do j = 1,NumOpenR
-!     In 1D the elastic cross section is:
+       do i = 1,NumOpenR
+          do j = 1,NumOpenR
+!     In 1D cross section is:
+c     CrossSections(i,j) = kvector(i)/kvector(j) *  dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
+             CrossSections(i,j) = dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
              
-       
-       
 c       For Recombination 
 c        CrossSections(i,j) = convertCGS_K3*dfloat(2*TotalAngMomentum+1)*
 c     .                       192.d0*pi*pi/(Mass*kVector(j)**4)*
@@ -2941,8 +3020,8 @@ c       For Relaxation
 c       CrossSections(i,j) = convertCGS_RX*dfloat(2*TotalAngMomentum+1)*
 c     .                        pi/(Mass*kVector(j)**1)*
 c     .                        dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
-!        enddo
-!       enddo 
+        enddo
+       enddo 
 
        return
        end      
@@ -3579,3 +3658,89 @@ c**************************************************************
        ENDIF
        
        END SUBROUTINE GridMaker
+
+      double precision function kdelta(mch,nch)
+      implicit none
+      integer mch,nch
+      if (mch.eq.nch) then
+         kdelta = 1.0d0
+      else 
+         kdelta = 0.0d0
+      endif
+      return
+      end function kdelta
+      
+      character(len=20) function str(k)
+!     "Convert an integer to string."
+      integer, intent(in) :: k
+      write (str, *) k
+      str = adjustl(str)
+      end function str
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      double precision function AsymptoticVQ(mu,m,n,R)
+      implicit none
+      integer m,n
+      double precision R, VQ, U, mu
+      double precision, external :: kdelta
+
+c     The asymptotic form of Qtilde
+      VQ = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1)))
+     .     -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3)))
+     .     -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
+
+      VQ = VQ*0.25d0/(2d0*mu*R**2)
+
+c     Add the asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
+      if(m.eq.n) then
+         VQ = VQ + dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
+      endif
+      AsymptoticVQ = VQ
+      
+      end
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      double precision function AsymptoticP(m,n,R)
+      implicit none
+
+      integer m,n
+      double precision R
+      double precision, external :: kdelta
+      if(m.ne.n) then
+         AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*n-1)) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
+         AsymptoticP = AsymptoticP/R
+      else
+         AsymptoticP = 0d0
+      endif
+      
+      end
+      
+      SUBROUTINE printmatrix(M,nr,nc,file)
+      IMPLICIT NONE
+      INTEGER nr,nc,file,j,k
+      DOUBLE PRECISION M(nr,nc)
+      
+      DO j = 1,nr
+         WRITE(file,40) (M(j,k), k = 1,nc)
+      ENDDO
+      
+ 20   FORMAT(1P,100D16.8)
+ 30   FORMAT(100D14.4)
+ 40   FORMAT(100F20.10)
+      
+      END SUBROUTINE printmatrix
+
+            
+      SUBROUTINE zprintmatrix(M,nr,nc,file)
+      IMPLICIT NONE
+      INTEGER nr,nc,file,j,k
+      DOUBLE complex M(nr,nc)
+      
+      DO j = 1,nr
+         WRITE(file,40) (M(j,k), k = 1,nc)
+      ENDDO
+      
+ 20   FORMAT(1P,100D16.8)
+ 30   FORMAT(100D14.4)
+ 40   FORMAT(100F20.10)
+      
+      END SUBROUTINE zprintmatrix
+      

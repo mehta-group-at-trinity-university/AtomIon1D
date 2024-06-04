@@ -1,0 +1,44 @@
+Number of energies		  PsiFlag		    CouplingFlag    troubleshooting    
+      40       			  0 			    1                   0
+
+Legendre File
+Legendre.dat
+
+Legendre Points
+     10
+
+ Shift	      Shift2		Order     Left	  Right 
+-2000.0d0     -0.01d0        	5           0	    0
+
+   alpha          mi          	      ma	         DD         L
+  1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
+
+xPoints    f-omega 	     Nbs	      C4     	      		 phi			Dtol
+200 	   3.2d5	     2                1.121d-56 	  -0.106877437			0.2d0
+
+ RSteps   RDerivDelt     RFirst    	      RLast		  OPGRID
+  1000       0.0001d0      0.5d0    	      100.0d0		  0
+
+NumOutputChannels
+10
+
+Output channels
+1      2	3	4	5	6	37	38	39	40
+
+!For the noninteracting case, let P be a reflection operator.  The symmetry cases can be broken down as:
+! For a domain theta = (0,Pi)
+!(1):  (Px,Py) = (1,1)		BCs: Left = 1, Right = 1
+!(2):  (Px,Py) = (-1,-1)	BCs: Left = 0, Right = 0
+!(3):  (Px,Py) = (1,-1)		BCs: Left = 1, Right = 0
+!(4):  (Px,Py) = (-1,1)		BCs: Left = 0, Right = 1
+! Cases (1), (2) correspond to positive total parity and (3), (4) correspond to negative total parity.
+! To obtain all states of a given total parity, we must use two different parameter files.
+! This parameter file computes case 2
+
+
+
+
+! Pi/2=1.5707963267948966
+! Pi/6=0.52359877559829882
+
+0.853138729379683d0
