@@ -3,3 +3,13 @@ cp VQmat.dat MyCABA/2bs/
 cp Pmat.dat MyCABA/2bs/
 cp QuickEffV.dat MyCABA/2bs/
 cp QuickPMat.dat MyCABA/2bs/
+cp DiabaticEnergies.dat MyCABA/2bs/oneopenchannel/
+cp VQmat.dat MyCABA/2bs/oneopenchannel/
+cp Pmat.dat MyCABA/2bs/oneopenchannel/
+cp QuickEffV.dat MyCABA/2bs/oneopenchannel/
+cp QuickPMat.dat MyCABA/2bs/oneopenchannel/
+cp DiabaticEnergies.dat MyCABA/2bs/twoopenchannels/
+cp VQmat.dat MyCABA/2bs/twoopenchannels/
+cp Pmat.dat MyCABA/2bs/twoopenchannels/
+cp QuickEffV.dat MyCABA/2bs/twoopenchannels/
+cp QuickPMat.dat MyCABA/2bs/twoopenchannels/

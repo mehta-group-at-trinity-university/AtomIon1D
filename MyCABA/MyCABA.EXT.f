@@ -60,8 +60,9 @@ c234567890
       double precision Ri,Rf,Xi,Xf,StepX,R(1:100000000)
       double precision Emin,Emax,wlenght,rstep,XP
       integer NPoints,npwave,NPointsW,NPS
-      double precision URmin,wlenghti,rstepi,dumb,ascat,phaseshift
-      integer ncount,ndumb
+      double precision URmin,wlenghti,rstepi,dumb,ascat,phaseshift,Parity
+      integer ncount,ndumb,P
+      character(len=20), external :: str
       character*64 GridName
 
 C     TIME INICIALIZATION
@@ -84,7 +85,7 @@ c     read in Gauss-Legendre info
       read(5,*)
 
       read(5,*)
-      read(5,*) TotalAngMomentum,Emin,Emax,NumE,ithresh
+      read(5,*) TotalAngMomentum,Emin,Emax,NumE,ithresh,Parity
       read(5,*)
 
       read(5,*)
@@ -133,20 +134,15 @@ c     allocate(leff(NumberL(NumBoxes)),Thresholds(NumberR(NumBoxes)))
 
 c     Thresholds(i) = 2B Energies from the Extrapolation Code
       open(18,file=FitFile,status='old')
-      read(18,*)NumTotStates,NumDataPoints
+      read(18,*) NumTotStates,NumDataPoints
       close(18)
       open(19,file='FitLeff.data',status='old') ! Contains only thresholds?
       read(19,*)
       read(19,*)
       read(19,*)
+      
       do i=1,NumChannels!NumTotStates
          read(19,*) ndumb, Thresholds(i),dumb,dumb,dumb
-!--------------------------------------------
-! (NPM) The following would be appropriate for a series of three-body channels that converge to zero as R->infty
-c$$$  if (Thresholds(i).gt.0.d0) then
-c$$$  Thresholds(i) = 0.d0
-c$$$  endif
-!--------------------------------------------
       enddo
       close(19)
       allocate(Egrid(NumE))
@@ -173,7 +169,6 @@ c     Checking WhereStart
       close(300)
  11   format(1P,100e22.12)
  301  format(100(e18.12,1x))
-c     301  format(100(e20.12,1x))
 
       if (xdata(NumDataPoints).ne.WhereStart) then
          WhereStart = xdata(NumDataPoints)
@@ -201,11 +196,10 @@ c     RADIAL GRID
       enddo
 
       Pi = dacos(-1.d0)
-!      Emax = 1.49d0 !3.166815355d-08    !(10^4 muK - Max income Energy)
       wlenght = 2.d0*Pi/dsqrt(2.d0*Mass*(Emax-Thresholds(1)))
       rstep = wlenght/dfloat(npwave) 
 
-      NPointsW = int((Rf-WhereStart)/rstep)+1
+      NPointsW = nint((Rf-WhereStart)/rstep)+1
       do iR = 1,NPointsW
          R(iR+NPoints) = WhereStart+(iR)*rstep
       enddo
@@ -317,21 +311,6 @@ c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
       ENDDO
       close(18)
 
-c     XXX
-c     do j = 1,NumChannels
-c     do k = j+1,NumChannels
-c     j=1; k=3;
-c     do i = 1,3   
-c     VQFit(j,k,i) = 0.d0
-c     VQFit(k,j,i) = 0.d0
-c     PFit(j,k,i)  = 0.d0
-c     PFit(k,j,i)  = 0.d0
-c     c       VQFit(j,k,i) = VQFit(k,j,i) 
-c     c        PFit(j,k,i) = -PFit(k,j,i) 
-c     enddo
-c     enddo
-c     enddo
-
       allocate(xData(NumDataPoints))
       allocate(VQmat(NumDataPoints,Numchannels,Numchannels))
       allocate(Pmat(NumDataPoints,Numchannels,Numchannels))
@@ -340,19 +319,14 @@ c     enddo
      >     PFile,QFile,xdata,VQmat,Pmat) ! read in the P, VQ matrix data to be interpolated later 
 
 
-      open(unit = 25, file = "Observables.dat")
-      open(unit = 26, file = "Kmatrix.dat")
-      open(unit = 27, file = "Smatrix.dat")
-      open(unit = 28, file = "TimeDelay.dat")
+      open(unit = 25, file = "Observables"//trim(str(nint(Parity)))//".dat")
+      open(unit = 26, file = "Kmatrix"//trim(str(nint(Parity)))//".dat")
+      open(unit = 27, file = "Smatrix"//trim(str(nint(Parity)))//".dat")
+      open(unit = 28, file = "TimeDelay"//trim(str(nint(Parity)))//".dat")
       
       do ie=1,NumE
          energy = Egrid(iE)
-c     if (energy.gt.Thresholds(ithresh+1)) goto 1234 
-c     This condition is valid for the relaxation problem. 
-c     It means that for energy.gt.Thresholds(ithresh+1) a 
-c     new channel will be open. So, re-edit the input file 
-c     to include those channels.
-         
+
          ishift = 0
          do ibox = 1,NumBoxes-1
 
@@ -373,36 +347,17 @@ c     to include those channels.
             Rstart = xSector(1)
             Rmatch = xSector(NumSectors+1)
             
-!     write(6,*)'Adiabatic Box:         ',ibox
-!     write(6,*)'Box Boundaries:        ',Rstart,Rmatch
-!     write(6,*)'NumOpenChannels Left:  ',NumOpenL
-!     write(6,*)'NumOpenChannels Right: ',NumOpenR
-!     write(6,*)'OpenMatrixDim:         ',NumOpen
-!     write(6,*)'ClosedMatrixDim:       ',MatrixDim
-!     write(6,*)'HalfBandwidth:         ',kl
-!     write(6,*)
-
             allocate(MEMap(Numchannels*NumSectors,6))
             call GenMEMap(Numchannels,Numsectors,MEMap)
             
             allocate(Gcc(iband,MatrixDim))
-            
-!     write(6,*)'starting CalcClosed'
             call CalcClosed(Numchannels,NumSectors,MatrixDim,kl,iband,MEMap,Mass,energy,
      >           xsector,LegPoints,xLeg,wLeg,NumDataPoints,xdata,VQmat,Pmat,PFit,VQFit,
      >           WhereStart,PExponents,VQExponents,Gcc)
-!     write(6,*)'done'
-!     write(6,*)
-            
             allocate(Gco(MatrixDim,NumOpen),Goo(NumOpen,NumOpen))
-            
-!     write(6,*)'starting CalcOpen'
             call CalcOpen(NumOpenL,NumOpenR,Numchannels,NumSectors,MatrixDim,MEMap,Mass,
      >           energy,xsector,LegPoints,xLeg,wLeg,NumDataPoints,xdata,VQmat,Pmat,
      >           PFit,VQFit,WhereStart,PExponents,VQExponents,Gco,Goo)
-!     write(6,*)'done'
-!     write(6,*)
-            
             allocate(Goc(NumOpen,MatrixDim))
             
             do i=1,NumOpen
@@ -426,22 +381,6 @@ c     Lapack Banded Linear Equation Solver
             allocate(logderiv(NumOpen))
             
             call dsyev('V','U',NumOpen,Goo,NumOpen,logderiv,work,lwork,info)
-            
-c     write(406,*)'log derivs in'
-c     write(406,407)b(1:NumOpenL)
-c     write(406,*)
-c     write(406,*)'solution'
-c     do i=1,NumOpenL
-c     write(406,407)psi_in(i,1:NumOpenL)
-c     enddo 
-c     write(406,*)
-c     write(406,*)'log derivs out'
-c     write(406,407)logderiv(1:NumOpen)
-c     write(406,*)
-c     write(406,*)'solution'
-c     do i=1,NumOpen
-c     write(406,407)Goo(i,1:NumOpen)
-c     enddo
 
             deallocate(xSector,work,ipiv)
             deallocate(MEMap,Gcc,Gco,Goc)
@@ -468,9 +407,8 @@ c     starting matching section
             endif
 
          enddo
-c         NumOpenR = NumberR(NumBoxes) ! Added this 5/28/2024 NPM
          
-c         write(6,*) "allocating SmatrixAvg to be of size ", NumOpenR
+         NumOpenR = NumberR(NumBoxes) ! Added this 5/28/2024 NPM        
          allocate(BoxAvgPartial(NumberR(NumBoxes),NumberR(NumBoxes)))
          allocate(TmatrixAvg(NumOpenR,NumOpenR))
          allocate(KmatrixAvg(NumOpenR,NumOpenR))
@@ -483,7 +421,8 @@ c         write(6,*) "allocating SmatrixAvg to be of size ", NumOpenR
          KmatrixAvg = 0.0d0
          SmatrixAvg = 0d0
          TimeDelay = 0d0
-         ! Now do the final box, averaging over the NumRmatch sectors.
+         
+         ! Now do the final box, averaging over the NumRmatch sectors. (NPM)
          do ir=1,NumRmatch
 
             NumSectors = NumSectorsBox(NumBoxes) + (ir-1)*NumNewSectors
@@ -492,21 +431,10 @@ c         write(6,*) "allocating SmatrixAvg to be of size ", NumOpenR
             if(ir .eq. 1 .and. NumBoxes .gt. 1) ishift = ishift + NumSectorsBox(NumBoxes-1)
             do is=1,NumSectors+1
                xSector(is) = xSectorTot(ishift+is)
-            enddo 
+            enddo
+            
             Rstart = xSector(1)
-c     xSector(NumSectors+1) = xSector(NumSectors+1)+100.d0
             Rmatch = xSector(NumSectors+1)
-
-c     c     jpdincao 08-09-04
-c     NumSectors = 100
-c     allocate(xSector(NumSectors+1))
-c     do is=1,NumSectors+1
-c     xSector(is) = xSectorTot(NumSectorsTot) +0.1d0*(is-1) +1.d0*(ir-1)
-c     enddo 
-c      Rstart = xSector(1)
-c      Rmatch = xSector(NumSectors+1)
-
-c      write(*,*)ir,NumSectors,NumBoxes,Rmatch
 
             NumOpenL = NumberL(NumBoxes)
             NumOpenR = NumberR(NumBoxes)
@@ -515,16 +443,6 @@ c      write(*,*)ir,NumSectors,NumBoxes,Rmatch
             kl = 6*Numchannels - 1
             ku = kl
             iband = 3*kl + 1
-
-c$$$      write(6,*)'Adiabatic Box:         ',NumBoxes
-c$$$      write(6,*)'Box Boundaries:        ',Rstart,Rmatch
-c$$$      write(6,*)'NumOpenChannels Left:  ',NumOpenL
-c$$$      write(6,*)'NumOpenChannels Right: ',NumOpenR
-c$$$      write(6,*)'OpenMatrixDim:         ',NumOpen
-c$$$      write(6,*)'ClosedMatrixDim:       ',MatrixDim
-c$$$      write(6,*)'HalfBandwidth:         ',kl
-c$$$      write(6,*) 
-
             
             allocate(MEMap(Numchannels*NumSectors,6))
             call GenMEMap(Numchannels,Numsectors,MEMap)
@@ -535,18 +453,13 @@ c$$$      write(6,*)
             call CalcClosed(Numchannels,NumSectors,MatrixDim,kl,iband,MEMap,Mass,energy,
      >           xsector,LegPoints,xLeg,wLeg,NumDataPoints,xdata,VQmat,Pmat,PFit,VQFit,
      >           WhereStart,PExponents,VQExponents,Gcc)
-!     write(6,*)'done'
-!     write(6,*)
             
             allocate(Gco(MatrixDim,NumOpen),Goo(NumOpen,NumOpen))
             
-!     write(6,*)'starting CalcOpen'
             call CalcOpen(NumOpenL,NumOpenR,Numchannels,NumSectors,MatrixDim,MEMap,Mass,
      >           energy,xsector,LegPoints,xLeg,wLeg,NumDataPoints,xdata,VQmat,Pmat,
      >           PFit,VQFit,WhereStart,PExponents,VQExponents,Gco,Goo)
-!     write(6,*)'done'
-!     write(6,*)
-            
+           
             allocate(Goc(NumOpen,MatrixDim))
             
             do i=1,NumOpen
@@ -585,16 +498,12 @@ c     starting matching section
             deallocate(Goo,logderiv)
 
 c     calculate S-matrix and scattering cross sections
-c     CrossSections is actually the K_3 (or VR) rate constant
 
             allocate(Smatrix(NumOpenR,NumOpenR),Tmatrix(NumOpenR,NumOpenR),Kmatrix(NumOpenR,NumOpenR))
-
             allocate(CrossSections(NumOpenR,NumOpenR))
 
-c            call CalcSmatrix(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
-c     >           solution,deriv,Smatrix,Tmatrix,CrossSections)
             call CalcSmatrix1D(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,Energy,RMatch,
-     >           solution,deriv,Smatrix,Tmatrix,CrossSections,Kmatrix)
+     >           solution,deriv,Smatrix,Tmatrix,CrossSections,Kmatrix,Parity)
 
             do i = 1,NumOpenR
                do j = 1,NumOpenR
@@ -604,41 +513,17 @@ c     >           solution,deriv,Smatrix,Tmatrix,CrossSections)
                   KmatrixAvg(i,j) = KmatrixAvg(i,j) + Kmatrix(i,j)
                enddo
             enddo
-            
-c     Recombination Rate
-c            Crosstot = 0.0d0
-c            do i=1,ithresh-1
-c               do j=ithresh,NumOpenR
-c                  Crosstot = Crosstot + CrossSections(i,j)  !NOT MEANINGFULL CURRENTLY SINCE CROSSSECTIONS IS JUST THE 1D K-Matrix
-c               enddo
-c            enddo
-
-c     c     Relaxation Rate 
-c     Crosstot = 0.0d0
-c     do i=1,ithresh-1  ! ithresh must indicate the entrance channel
-c     do j=ithresh,ithresh 
-c     Crosstot = Crosstot + CrossSections(i,j)
-c     enddo
-c     enddo
-
 
             do ic=1,ithresh-1
                Crosstot = Crosstot + CrossSections(ic,ithresh)
             enddo
             Boxavg = Boxavg + Crosstot
-            
-!     write(6,*)'Rate Constant K_3(cm^6/sec)'
-!     write(6,*) Crosstot
-            
-c     write(29+NumE,28)Rmatch,Crosstot,CrossSections(1:ithresh-1,ithresh)
-c     write(*,20)(energy-Thresholds(ithresh))/muK,1.d0*ir,((CrossSections(i,j),j=1,NumOpenR),i=1,NumOpenR)
-            
+                        
             deallocate (Smatrix,Tmatrix,CrossSections,Kmatrix)
             deallocate(solution,deriv)
             
          enddo
          
-!     write(6,*)'Done'
          do i = 1,NumberR(NumBoxes)
             do j = 1,NumberR(NumBoxes)
                BoxAvgPartial(i,j) = BoxAvgPartial(i,j)/dfloat(NumRmatch)
@@ -650,11 +535,7 @@ c     write(*,20)(energy-Thresholds(ithresh))/muK,1.d0*ir,((CrossSections(i,j),j
          
          Timedelay = (0d0,0d0)
          if(iE.gt.1) then
-c     write(6,*) "NumOpenR = ", NumOpenR
-c     write(6,*) Timedelay
-c     write(6,*) "------------------"
-c     write(6,*) (Egrid(iE)-Egrid(iE-1))
-c     write(6,*) "------------------"
+            
             Timedelay = (SmatrixAvg - SmatrixOld)/(Egrid(iE)-Egrid(iE-1))            
             call zgemm('N', 'C', NumOpenR, NumOpenR, NumOpenR, -(0d0,1d0), SmatrixAvg,
      .           NumOpenR, TimeDelay, NumOpenR, (0d0,0d0), TimeDelay, NumOpenR)
@@ -668,43 +549,27 @@ c     write(6,*) "------------------"
 c            call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), SmatrixOld,
 c     .           NumOpenR, SmatrixOld, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
 c     write(6,*) test
-c            call zprintmatrix(test,NumOpenR,NumOpenR,6)
+c     call zprintmatrix(test,NumOpenR,NumOpenR,6)
          endif
          SmatrixOld = SmatrixAvg
-c     do ic = 1,ithresh-1
-c     Partial Vibrational Relaxation Rate
-c     write(9+ic,20)(energy-Thresholds(ithresh))/muK,(BoxAvgPartial(ic,j),j=ithresh,ithresh) 
-c     Partial Recombination Rate
-c     write(9+ic,20)(energy-Thresholds(ithresh))/muK,BoxAvgPartial(ic,ithresh:NumberR(NumBoxes))
-c         enddo
 
          BoxAvg = BoxAvg/float(NumRmatch)
-!     write(6,*)
-!     write(6,*)'Box average results'
-!     write(6,*)BoxAvg
-c     write(25,*)energy/3.165226467522434d-12,BoxAvg
-c     write(25,*)(energy-Thresholds(ithresh))/muK,BoxAvg
-c         write(25,*) (energy-Thresholds(ithresh)),BoxAvg
-
-c     Tmatrix outPut      
-c         write(1000,20)(energy-Thresholds(ithresh))/muK,((TmatrixAvg(i,j),j=1,NumOpenR),i=1,NumOpenR)
 
          call cpu_time(timep)
-c     Total and Partial Vibrational Relaxation Rate
-c     write(*,20)(energy-Thresholds(ithresh))/muK,
-c     .           ((BoxAvgPartial(i,j),j=ithresh,ithresh),i=1,ithresh-1),BoxAvg,timep-secp
-c         write(*,20)(energy-Thresholds(ithresh))/muK,BoxAvg,
-c     .        ((BoxAvgPartial(i,j),j=ithresh,NumOpenR),i=1,ithresh-1),timep-secp
-c         ascat = 1/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh))
-         ascat = -KmatrixAvg(ithresh,ithresh)/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh))))
+         P = nint((1d0 + (-1)**ithresh*Parity)/2)
+         if(P.eq.1) then
+            ascat = 1d0/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh)) !a=1/(k tandelta) for P=1
+         else if(P.eq.0) then
+            ascat = -KmatrixAvg(ithresh,ithresh)/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))) ! a = -k/tandel for P=0
+         endif
          phaseshift = atan(KmatrixAvg(ithresh,ithresh))
 
          write(6,21) 'min. to go = ',((timep-secp)*float(NumE-iE))/(60d0), (energy-Thresholds(ithresh)), ascat, phaseshift,
      .        BoxAvgPartial(1,1)     
-         write(25,20) (energy-Thresholds(ithresh)), ascat, phaseshift, sin(phaseshift)**2,sin(phaseshift - 0.5d0*Pi)**2, BoxAvgPartial(1,1)
-         write(26,20) energy, (Thresholds(i), i = 1, NumOpenR), ((KmatrixAvg(i,j), i=1,NumOpenR), j=1,NumOpenR)
-         write(27,20) energy, (Thresholds(i), i = 1, NumOpenR), ((SmatrixAvg(i,j), i=1,NumOpenR), j=1,NumOpenR)
-         write(28,20) energy, (Thresholds(i), i = 1, NumOpenR), ((TimeDelay(i,j), i=1,NumOpenR), j=1,NumOpenR)
+         write(25,20) energy, ascat, ((BoxAvgPartial(i,j), i=1,NumOpenR), j=1,NumOpenR)
+         write(26,20) energy, ((KmatrixAvg(i,j), i=1,NumOpenR), j=1,NumOpenR)
+         write(27,20) energy, ((dreal(conjg(SmatrixAvg(i,j))*SmatrixAvg(i,j)), i=1,NumOpenR), j=1,NumOpenR)
+         write(28,20) energy, ((TimeDelay(i,j), i=1,NumOpenR), j=1,NumOpenR)
 
          call cpu_time(timep)
          secp = timep 
@@ -721,7 +586,7 @@ c         ascat = 1/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(i
       deallocate(xLeg,wLeg)
 
  20   format(1P,100e16.8)
- 21   format(a13,f5.2,100e16.8)
+ 21   format(a13,f7.2,100e16.8)
  28   format(f10.2,1P,100e14.5)
  407  format(10(e16.8,1x))
  1002 format(a64)
@@ -795,7 +660,7 @@ ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       x = k*r
       a = dsqrt(r)
       b = 1.0d0/a
-      lInt = int(l+0.5d0)
+      lInt = nint(l+0.5d0)
       alpha = l+0.5d0-dfloat(lInt)
       alphaComp = dabs(alpha-1.0d0)
 
@@ -2893,10 +2758,11 @@ c     .                        dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
        end
 c-------------------------------------------------------------------------------------------------------      
       subroutine CalcSmatrix1D(NumOpenR,leff,Thresholds,TotalAngMomentum,Mass,
-     >                       Energy,RMatch,solution,deriv,Smatrix,Tmatrix,CrossSections,Kmat)
-      integer TotalAngMomentum
+     >     Energy,RMatch,solution,deriv,Smatrix,Tmatrix,CrossSections,Kmat,Parity)
+      implicit none
+      integer TotalAngMomentum,i,info,j
       integer NumOpenR,ipiv(NumOpenR)
-      double precision leff(NumOpenR),Thresholds(NumOpenR),Mass,RMatch
+      double precision leff(NumOpenR),Thresholds(NumOpenR),Mass,RMatch,P,Parity
       double precision solution(NumOpenR,NumOpenR)
       double precision deriv(NumOpenR),cmPERau,secPERau,convertCGS
       double precision convertCGS_K3,convertCGS_RX
@@ -2910,24 +2776,26 @@ c-------------------------------------------------------------------------------
       double precision Tmatrix(NumOpenR,NumOpenR),TmatrixAux(NumOpenR,NumOpenR),ImatAux(NumOpenR,NumOpenR)
       double complex Smatrix(NumOpenR,NumOpenR)
       double complex IJmat(NumOpenR,NumOpenR)
-
+      double precision, external :: kdelta
+      
       pi = dacos(-1.0d0)
       cmPERau = 5.29178d-09
       secPERau = 2.4189d-17
       convertCGS_K3 = cmPERau**6/secPERau
       convertCGS_RX = cmPERau**3/secPERau
-
+      
       do i=1,NumOpenR
          
          kVector(i) = dsqrt(2.0d0*Mass*(Energy-Thresholds(i)))
-         enorm(i) = dsqrt(2.0d0*kVector(i)/pi)
-         
 c     call BesselBasePair(kVector(i),RMatch,leff(i),f,fp,g,gp)
          
 
 C     In 1D we switch the roles of f and g so look carefully at the argument order of the following call
 c     Note that leff(i) should be zero for all two-body channels in 1D.
 c     Make sure this is the case in the input file
+c         enorm(i) = dsqrt(2.0d0*kVector(i)/pi)
+
+
 c$$$         x = kVector(i)*Rmatch
 c$$$         call sphbes(leff(i),x,g,f,gp,fp)
 c     Now g ~ sin(kx) and f ~ -cos(kx) so we'll need to multiply f by a negative sign.         
@@ -2935,15 +2803,25 @@ c$$$         fp = -enorm(i)*(f + x*fp)
 c$$$         f = -enorm(i)*Rmatch*f
 c$$$         gp = enorm(i)*(g + x*gp)
 c$$$         g = enorm(i)*Rmatch*g
-
+c         write(6,*) "leff(",i,") = ", leff(i)
           x = kVector(i)*Rmatch
-          call sphbes(leff(i),x,f,g,fp,gp)
-          fp = enorm(i)*(f + x*fp)
-          f = enorm(i)*Rmatch*f
-          gp = enorm(i)*(g + x*gp)
-          g = enorm(i)*Rmatch*g
+c$$$          call sphbes(leff(i),x,f,g,fp,gp)
+c$$$          fp = enorm(i)*(f + x*fp)
+c$$$          f = enorm(i)*Rmatch*f
+c$$$          gp = enorm(i)*(g + x*gp)
+c$$$          g = enorm(i)*Rmatch*g
+          P = (1d0 + Parity*(-1d0)**i)/2d0
+          enorm(i) = dsqrt(Mass/(2d0*pi*kVector(i)))
+          f = enorm(i)*sin(x + P*0.5d0*pi)
+          fp = enorm(i)*kVector(i)*cos(x + P*0.5d0*pi)
+          g = -enorm(i)*cos(x + P*0.5d0*pi)
+          gp = enorm(i)*kVector(i)*sin(x + P*0.5d0*pi)
+c          f = enorm(i)*cos(x - 0.25d0*pi)
+c          fp = -enorm(i)*kVector(i)*sin(x - 0.25d0*pi)
+c          g = enorm(i)*sin(x - 0.25d0*pi)
+c          gp = enorm(i)*kVector(i)*cos(x - 0.25d0*pi)
          
-          Wronskian = 1.0d0/(g*fp-gp*f)
+          Wronskian = 1.0d0/(g*fp-gp*f) ! W(g,f)
      
 !write(6,*) 'Wronskian check:    ',2.0d0*Wronskian/Pi
  36      format(5(e12.6,1x))
@@ -2978,7 +2856,7 @@ c     calculate S-matrix
          Smatrix(i,j) = IMat(j,i)+(0.0d0,1.0d0)*JMat(j,i)
         enddo
        enddo
- 
+       
        call zgesv(NumOpenR,NumOpenR,IJMat,NumOpenR,ipiv,Smatrix,NumOpenR,info)
 
 c     Subtract 1 from the diagonal elements
@@ -3009,8 +2887,10 @@ c       CrossSections = Kmat
        do i = 1,NumOpenR
           do j = 1,NumOpenR
 !     In 1D cross section is:
-c     CrossSections(i,j) = kvector(i)/kvector(j) *  dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
-             CrossSections(i,j) = dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
+c             CrossSections(i,j) = kvector(i)/kvector(j) *  dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
+c     CrossSections(i,j) =  dreal(dconjg(Smatrix(i,j)-kdelta(i,j))*(Smatrix(i,j)-kdelta(i,j)))/4d0
+             CrossSections(i,j) =  kvector(i)/kvector(j) * dreal(dconjg(Smatrix(i,j)-kdelta(i,j))*(Smatrix(i,j)-kdelta(i,j)))/4d0
+c             CrossSections(i,j) =  dreal(dconjg(Smatrix(i,j))*Smatrix(i,j))
              
 c       For Recombination 
 c        CrossSections(i,j) = convertCGS_K3*dfloat(2*TotalAngMomentum+1)*
@@ -3097,10 +2977,10 @@ c*******************************************************************************
 
         iflag = 1
         do i=1,NumCoef
-         if (abs(denom(i)) .gt. 1.0d-8)then
-          deriv(iflag) = -areal(i)/denom(i)
+         if (abs(denom(i)) .gt. 1.0d-8) then  ! Select the non-infinite eigenvalues (NPM)
+          deriv(iflag) = -areal(i)/denom(i) ! The normal log-derivative = -b
           do j=1,NumCoef
-           coef(j,iflag) = cpsi(j,i)
+           coef(j,iflag) = cpsi(j,i) ! The D coefficients in Burke's thesis
           enddo
           iflag = iflag+1
          endif
@@ -3468,7 +3348,7 @@ c following assumes v = n+1/2 where n=0,1,2,......
       Q = 0.0d0
       R = 0.0d0
       S = 0.0d0
-      do k=0,int(v-0.5)
+      do k=0,nint(v-0.5d0)
        !write(6,*)'Doing Loop'
        sign = (-1.0d0)**k
        denomP = (2.0d0*x)**(2*k)
@@ -3568,7 +3448,7 @@ c**************************************************************
       call dgetri(N, A, N, ipiv, work, lwk, info)
       deallocate(ipiv,work)
       end
-
+c**************************************************************      
       SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
       implicit none
       DOUBLE PRECISION grid(numpts)
@@ -3677,6 +3557,7 @@ c**************************************************************
       str = adjustl(str)
       end function str
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      ! This is the asymptotic form of the potential and the Q-matrix for states that go collision channels (exculded are molecular ion channels)
       double precision function AsymptoticVQ(mu,m,n,R)
       implicit none
       integer m,n
@@ -3712,7 +3593,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       endif
       
       end
-      
+cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc      
       SUBROUTINE printmatrix(M,nr,nc,file)
       IMPLICIT NONE
       INTEGER nr,nc,file,j,k

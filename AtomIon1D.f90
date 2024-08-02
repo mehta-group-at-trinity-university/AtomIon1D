@@ -315,7 +315,7 @@ program AtomIon1D
      !-------- Couplings from the diabatized eigenstates -------------!
      call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,P(:,:,iR),QTil(:,:,iR),ncv)      
 
-     write(103,*) R(iR),(P(WriteChannels(WriteChannels(NumOutPutChannels-4)),WriteChannels(i),iR),i=1,NumOutputChannels)
+     write(103,*) R(iR),(P(WriteChannels(NumOutPutChannels-3),WriteChannels(i),iR),i=NumOutputChannels-3,NumOutputChannels)
      write(104,*) R(iR),(AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
           + QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu),i=1,NumOutputChannels)
      write(106,*) R(iR), (QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i=1, NumOutputChannels)
@@ -336,7 +336,8 @@ program AtomIon1D
   enddo
 
   do iR = 1, RSteps
-     write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies      
+     !     write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies
+     write(200,11) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
      write(101,11) R(iR)
      write(102,11) R(iR)
      write(105,11) R(iR)
@@ -1719,3 +1720,89 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
   ENDIF
 
 END SUBROUTINE GridMaker
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+double precision function AsymptoticU(mu,n,R)
+  implicit none
+  integer n
+  double precision R, mu
+  !c  The asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
+  AsymptoticU = dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
+end function AsymptoticU
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+double precision function AsymptoticQtil(mu,m,n,R)
+  implicit none
+  integer m,n
+  double precision R, Q, mu
+  double precision, external :: kdelta
+  
+  !c     The asymptotic form of Qtilde
+  Q = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1))) &
+       -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3))) &
+       -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
+  
+  AsymptoticQtil = Q*0.25d0/(2d0*mu*R**2)
+    
+end function AsymptoticQtil
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+! This is the asymptotic form of the potential and the Q-matrix for states that go collision channels (exculded are molecular ion channels)
+double precision function AsymptoticVQ(mu,m,n,R)
+  implicit none
+  integer m,n
+  double precision R, VQ, U, mu
+  double precision, external :: kdelta
+  
+  !c     The asymptotic form of Qtilde
+  VQ = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1))) &
+       -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3))) &
+       -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
+  
+  VQ = VQ*0.25d0/(2d0*mu*R**2)
+  
+  !c     Add the asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
+  if(m.eq.n) then
+     VQ = VQ + dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
+  endif
+  AsymptoticVQ = VQ
+  
+end function AsymptoticVQ
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+double precision function AsymptoticP(m,n,R)
+  implicit none
+  
+  integer m,n
+  double precision R
+  double precision, external :: kdelta
+  if(m.ne.n) then
+     AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*n-1)) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
+     AsymptoticP = AsymptoticP/R
+  else
+     AsymptoticP = 0d0
+  endif
+  
+end function AsymptoticP
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+subroutine TestAsymptotics(mu,fileVQ,fileP,NC)
+  implicit none
+  integer m, n, NR, iR, NC
+  double precision R1,R2,mu
+  double precision, allocatable :: R(:)
+  CHARACTER*64 fileVQ,fileP
+  double precision, external :: AsymptoticP, AsymptoticVQ, AsymptoticU, AsymptoticQtil
+
+  OPEN(unit=900,file=fileVQ(1:INDEX(fileVQ,' ')-1))
+  OPEN(unit=901,file=fileP(1:INDEX(fileP,' ')-1))
+
+  NR=1000
+  R1=10.d0
+  R2=200.d0
+
+  allocate(R(NR))
+  call GridMaker(R,NR,R1,R2,"linear")
+  do iR=1,NR
+     write(fileP,*) R(iR), ((AsymptoticP(m,n,R(iR)), n=m,NC), m=1,NC)
+     write(fileP,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR)), n=m,NC), m=1,NC)
+  enddo
+  
+
+
+end subroutine TestAsymptotics

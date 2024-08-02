@@ -4,32 +4,33 @@ Legendre.dat
 Legendre Points   WhereStart (R value to start coupling fits)
     10              50.d0
 
- J    Emin (hbar omega)      Emax           NumE   Incident Threshold 
- 0    0.01d0    	     0.99d0         1000              1
+ J    Emin (hbar omega)      Emax           NumE   Incident Threshold	Parity
+ 0    1.01d0    	     1.99d0         2000              1		1
 
  ma     		mi 
  6.015122d0  		170.9363230d0        
 
 NumChannels  NumOpenChannels(Box1)     Number of Adiabatic Boxes
-    8             8                           10
+    12             12                           10
 
 Channels Open in Adiabatic Boxes:     NumOpenL NumOpenR
-                                         0        8
-					 8	  8
-					 8	  8
-					 8	  8
-					 8	  8
-					 8	  8					 
-					 8	  8
-					 8	  8
-					 8	  8
-					 8	  1
+                                         0        12
+					 12	  12
+					 12	  12
+					 12	  12
+					 12	  12
+					 12	  12					 
+					 12	  12
+					 12	  12
+					 12	  12
+					 12	  2
 					 
 Number of Rmatch Points    NumNewSectors  
        100                      0
 
 Effective L              Threshold
  0.0d0                     0.5d0
+ 0.0d0                     1.5d0
 
 Pmatrix File
 Pmat.dat
