@@ -111,7 +111,7 @@ c      write(6,*) "allocating SmatrixOld, and TimeDelay to be of size", NumberR(
       allocate(TimeDelay(NumberR(NumBoxes),NumberR(NumBoxes)))
       read(5,*)
       read(5,*)
-      read(5,*)NumRmatch,NumNewSectors
+      read(5,*) NumRmatch, NumNewSectors
 c     allocate(leff(NumberL(NumBoxes)),Thresholds(NumberR(NumBoxes)))
       allocate(leff(NumberL(NumBoxes)),Thresholds(NumberL(NumBoxes)))
       read(5,*)
@@ -124,7 +124,6 @@ c     allocate(leff(NumberL(NumBoxes)),Thresholds(NumberR(NumBoxes)))
       read(5,*)
       read(5,*)
       read(5,1002) PFile
-      write(6,*) "PFile = ", PFile
       read(5,*)
       read(5,*)
       read(5,1002) QFile  
@@ -141,7 +140,7 @@ c     Thresholds(i) = 2B Energies from the Extrapolation Code
       read(19,*)
       read(19,*)
       
-      do i=1,NumChannels!NumTotStates
+      do i=1,NumTotStates
          read(19,*) ndumb, Thresholds(i),dumb,dumb,dumb
       enddo
       close(19)
@@ -158,7 +157,8 @@ c     Checking WhereStart
       allocate(xdata(NumDataPoints))
       open(300,file=QFile,status='old')
       do i=1,NumDataPoints
-         read(300,*)xdata(i)
+c         write(6,*) "Reading VQmat... i = ", i
+         read(300,*) xdata(i)
          do j=1,Numchannels
             read(300,11)(VQmat(i,j,k),k=1,Numchannels)
          enddo
@@ -319,10 +319,14 @@ c     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
      >     PFile,QFile,xdata,VQmat,Pmat) ! read in the P, VQ matrix data to be interpolated later 
 
 
-      open(unit = 25, file = "Observables"//trim(str(nint(Parity)))//".dat")
-      open(unit = 26, file = "Kmatrix"//trim(str(nint(Parity)))//".dat")
-      open(unit = 27, file = "Smatrix"//trim(str(nint(Parity)))//".dat")
-      open(unit = 28, file = "TimeDelay"//trim(str(nint(Parity)))//".dat")
+      open(unit = 25, file = "Observables"//trim(str(nint(Parity)))//"-"
+     >     //trim(str(NumberR(NumBoxes)))//".dat")
+      open(unit = 26, file = "Kmatrix"//trim(str(nint(Parity)))//"-"
+     >     //trim(str(NumberR(NumBoxes)))//".dat")
+      open(unit = 27, file = "Smatrix"//trim(str(nint(Parity)))//"-"
+     >     //trim(str(NumberR(NumBoxes)))//".dat")
+      open(unit = 28, file = "TimeDelay"//trim(str(nint(Parity)))//"-"
+     >     //trim(str(NumberR(NumBoxes)))//".dat")
       
       do ie=1,NumE
          energy = Egrid(iE)
@@ -546,10 +550,11 @@ c     calculate S-matrix and scattering cross sections
             enddo
             TimeDelay = test
             
-c            call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), SmatrixOld,
-c     .           NumOpenR, SmatrixOld, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
-c     write(6,*) test
-c     call zprintmatrix(test,NumOpenR,NumOpenR,6)
+            call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), SmatrixOld,
+     .           NumOpenR, SmatrixOld, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
+c            write(6,*) test
+c            call zprintmatrix(test,NumOpenR,NumOpenR,6)
+c            stop
          endif
          SmatrixOld = SmatrixAvg
 
@@ -2141,7 +2146,7 @@ c form matrix element map
       double precision WhereStart,vvj,ppj,psign
       double precision PExponents(Numchannels,Numchannels,3)
       double precision VQExponents(Numchannels,Numchannels,3)
-      double precision, external :: AsymptoticP, AsymptoticVQ
+!      double precision, external :: AsymptoticP, AsymptoticVQ
 
       call BasicKineticMatrix(BasicT)
 
@@ -2169,7 +2174,7 @@ c index one sector at a time
 c     integrate potentials in each block
           
           do jc = 1,Numchannels
-             psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
+!             psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
 c             write(6,*) "psign = ", psign
              do ik=1,NumDataPoints
                 ydata(ik)=VQmat(ik,nc,jc)
@@ -2383,7 +2388,7 @@ c       upp(6,n) =  -0.5d0 - 1.5d0*x + 3.0d0*x2 + 5.0d0*x3
       double precision WhereStart,vvj,ppj,Dpj,psign
       double precision PExponents(NumChannels,NumChannels,3)
       double precision VQExponents(NumChannels,NumChannels,3)
-      double precision, external :: AsymptoticP, AsymptoticVQ
+!      double precision, external :: AsymptoticP, AsymptoticVQ
       
       call BasicKineticMatrix(BasicT)
 
@@ -2410,7 +2415,7 @@ c open channels on left boundary
 c     integrate potentials in each block
          
          do jc = 1,NumChannels
-            psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
+!            psign = sign(1d0,AsymptoticP(nc,jc,xdata(NumDataPoints))*Pmat(NumDataPoints,nc,jc))
             do ik=1,NumDataPoints
                ydata(ik) = VQmat(ik,nc,jc)
             enddo
@@ -2774,62 +2779,28 @@ c-------------------------------------------------------------------------------
       double precision Kmat(NumOpenR,NumOpenR)
       double precision enorm(NumOpenR),x
       double precision Tmatrix(NumOpenR,NumOpenR),TmatrixAux(NumOpenR,NumOpenR),ImatAux(NumOpenR,NumOpenR)
-      double complex Smatrix(NumOpenR,NumOpenR)
-      double complex IJmat(NumOpenR,NumOpenR)
+      double complex Smatrix(NumOpenR,NumOpenR), KCheck(NumOpenR,NumOpenR),test(NumOpenR,NumOpenR)
+      double complex IJmat(NumOpenR,NumOpenR),Identity(NumOpenR,NumOpenR),II
       double precision, external :: kdelta
-      
+      II = (0d0, 1d0)
       pi = dacos(-1.0d0)
       cmPERau = 5.29178d-09
       secPERau = 2.4189d-17
       convertCGS_K3 = cmPERau**6/secPERau
       convertCGS_RX = cmPERau**3/secPERau
       
-      do i=1,NumOpenR
-         
+      do i=1,NumOpenR         
          kVector(i) = dsqrt(2.0d0*Mass*(Energy-Thresholds(i)))
-c     call BesselBasePair(kVector(i),RMatch,leff(i),f,fp,g,gp)
-         
-
-C     In 1D we switch the roles of f and g so look carefully at the argument order of the following call
-c     Note that leff(i) should be zero for all two-body channels in 1D.
-c     Make sure this is the case in the input file
-c         enorm(i) = dsqrt(2.0d0*kVector(i)/pi)
-
-
-c$$$         x = kVector(i)*Rmatch
-c$$$         call sphbes(leff(i),x,g,f,gp,fp)
-c     Now g ~ sin(kx) and f ~ -cos(kx) so we'll need to multiply f by a negative sign.         
-c$$$         fp = -enorm(i)*(f + x*fp)
-c$$$         f = -enorm(i)*Rmatch*f
-c$$$         gp = enorm(i)*(g + x*gp)
-c$$$         g = enorm(i)*Rmatch*g
-c         write(6,*) "leff(",i,") = ", leff(i)
-          x = kVector(i)*Rmatch
-c$$$          call sphbes(leff(i),x,f,g,fp,gp)
-c$$$          fp = enorm(i)*(f + x*fp)
-c$$$          f = enorm(i)*Rmatch*f
-c$$$          gp = enorm(i)*(g + x*gp)
-c$$$          g = enorm(i)*Rmatch*g
-          P = (1d0 + Parity*(-1d0)**i)/2d0
-          enorm(i) = dsqrt(Mass/(2d0*pi*kVector(i)))
-          f = enorm(i)*sin(x + P*0.5d0*pi)
-          fp = enorm(i)*kVector(i)*cos(x + P*0.5d0*pi)
-          g = -enorm(i)*cos(x + P*0.5d0*pi)
-          gp = enorm(i)*kVector(i)*sin(x + P*0.5d0*pi)
-c          f = enorm(i)*cos(x - 0.25d0*pi)
-c          fp = -enorm(i)*kVector(i)*sin(x - 0.25d0*pi)
-c          g = enorm(i)*sin(x - 0.25d0*pi)
-c          gp = enorm(i)*kVector(i)*cos(x - 0.25d0*pi)
-         
-          Wronskian = 1.0d0/(g*fp-gp*f) ! W(g,f)
-     
-!write(6,*) 'Wronskian check:    ',2.0d0*Wronskian/Pi
- 36      format(5(e12.6,1x))
-         
-!     write(6,*) 'Bessel funcs:'
-!     write(6,*) i,f,fp
-!     write(6,*) i,g,gp
-!     write(6,*)
+         x = kVector(i)*Rmatch
+         P = (1d0 + Parity*(-1d0)**(i-1))/2d0
+         enorm(i) = dsqrt(Mass/(2d0*pi*kVector(i)))
+         f = enorm(i)*sin(x + P*0.5d0*pi)
+         fp = enorm(i)*kVector(i)*cos(x + P*0.5d0*pi)
+         g = -enorm(i)*cos(x + P*0.5d0*pi)
+         gp = enorm(i)*kVector(i)*sin(x + P*0.5d0*pi)
+          Wronskian = 1.0d0/(g*fp-gp*f) ! 1/W(g,f)     
+c     write(6,*) 'Wronskian check:    ',2.0d0*Wronskian/Pi
+ 36      format(5(e12.6,1x))         
 c----------------------------------------------------------------------------------------------------
 c     Here, the solution matrix F = f I - g J and we want to match to the form M = f - g K
 c     Therefore M = F I^(-1) and K = J I^(-1)
@@ -2839,7 +2810,6 @@ c     Similarly,     W(F,g) = W(f,g) I ==> I = W(F,g)/W(f,g) = -W(F,g)/W(g,f)
             IMat(i,j) = -(g*deriv(j)+gp)*Solution(i,j)*Wronskian
             JMat(i,j) = -(f*deriv(j)+fp)*Solution(i,j)*Wronskian
          enddo
-         
       enddo
 c     Compute the K-matrix
       ImatTemp = Imat      
@@ -2849,21 +2819,34 @@ c--------------------------------------------------------
 c     calculate S-matrix
 
       IJMat = (0.0d0,0.0d0)
- 
+c     From the Orange Review, S^dag = (I - i J)(I + i J)^(-1) --> S = (I + i J)^dag^(-1) (I - i J)^dag
        do i = 1,NumOpenR
         do j = 1,NumOpenR
-         IJMat(i,j)   = IMat(j,i)-(0.0d0,1.0d0)*JMat(j,i)
-         Smatrix(i,j) = IMat(j,i)+(0.0d0,1.0d0)*JMat(j,i)
+         IJMat(i,j)   = IMat(j,i)-(0.0d0,1.0d0)*JMat(j,i)  !Note the order of the indices here. IJmat = (I + i J)^dag
+         Smatrix(i,j) = IMat(j,i)+(0.0d0,1.0d0)*JMat(j,i)  !This matrix is B below, which gets overwritten by zgesv B = (I - i J)^dag
         enddo
        enddo
-       
+c     zgesv solves A X = B so in this case S = A^(-1) B, as required.       
        call zgesv(NumOpenR,NumOpenR,IJMat,NumOpenR,ipiv,Smatrix,NumOpenR,info)
+       call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), Smatrix,
+     .      NumOpenR, Smatrix, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
+       write(6,*) "test unitarity of S:"
+       call zprintmatrix(test,NumOpenR,NumOpenR,6)
 
-c     Subtract 1 from the diagonal elements
-c       do i = 1,NumOpenR
-c        Smatrix(i,i) = Smatrix(i,i) - (1.0d0,0.0d0)
-c       enddo
-
+       Identity = (0d0,0d0)
+       do i = 1, NumOpenR
+          Identity(i,i) = (1d0, 0d0)
+       enddo
+       ! The following check works!  Agrees with the Kmat computed above.
+c$$$       KCheck = II*(Identity - Smatrix)
+c$$$       test = Identity + Smatrix
+c$$$       call zgesv(NumOpenR,NumOpenR,test,NumOpenR,ipiv,KCheck,NumOpenR,info)       
+c$$$       write(6,*) "K-Matrix as computed from S:"
+c$$$       call zprintmatrix(KCheck,NumOpenR,NumOpenR,6)
+       
+       write(6,*) "K-Matrix as computed from I,J:"
+       call printmatrix(Kmat,NumOpenR,NumOpenR,6)
+       stop
 c     calculate T-matrix
 
        do i = 1,NumOpenR
@@ -3557,43 +3540,7 @@ c**************************************************************
       str = adjustl(str)
       end function str
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      ! This is the asymptotic form of the potential and the Q-matrix for states that go collision channels (exculded are molecular ion channels)
-      double precision function AsymptoticVQ(mu,m,n,R)
-      implicit none
-      integer m,n
-      double precision R, VQ, U, mu
-      double precision, external :: kdelta
 
-c     The asymptotic form of Qtilde
-      VQ = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1)))
-     .     -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3)))
-     .     -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
-
-      VQ = VQ*0.25d0/(2d0*mu*R**2)
-
-c     Add the asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
-      if(m.eq.n) then
-         VQ = VQ + dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
-      endif
-      AsymptoticVQ = VQ
-      
-      end
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      double precision function AsymptoticP(m,n,R)
-      implicit none
-
-      integer m,n
-      double precision R
-      double precision, external :: kdelta
-      if(m.ne.n) then
-         AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*n-1)) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
-         AsymptoticP = AsymptoticP/R
-      else
-         AsymptoticP = 0d0
-      endif
-      
-      end
-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc      
       SUBROUTINE printmatrix(M,nr,nc,file)
       IMPLICIT NONE
       INTEGER nr,nc,file,j,k

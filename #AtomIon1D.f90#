@@ -1,4 +1,4 @@
-module BasisSets
+Amodule BasisSets
   implicit none
   TYPE basis
      integer Left, Right, xDim

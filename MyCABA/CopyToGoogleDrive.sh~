@@ -1,0 +1,21 @@
+#! /bin/zsh
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBS_3/
+#
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/oneBSphi0_3/
+#
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/
+cp MyCABA.EXT.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/
+cp NewFitProg.x /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/
+cp runcaba.sh /Users/niravmehta/Google\ Drive/My\ Drive/Ion-Atom-Trap-Stuff/NewCurves/zeroBSphipiovertwo_1/

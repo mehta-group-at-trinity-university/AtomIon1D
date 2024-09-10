@@ -11,19 +11,19 @@ Legendre Points   WhereStart (R value to start coupling fits)
  6.015122d0  		170.9363230d0        
 
 NumChannels  NumOpenChannels(Box1)     Number of Adiabatic Boxes
-    12             12                           10
+    10             10                           10
 
 Channels Open in Adiabatic Boxes:     NumOpenL NumOpenR
-                                         0        12
-					 12	  12
-					 12	  12
-					 12	  12
-					 12	  12
-					 12	  12					 
-					 12	  12
-					 12	  12
-					 12	  12
-					 12	  2
+                                         0        10
+					 10	  10
+					 10	  10
+					 10	  10
+					 10	  10
+					 10	  10					 
+					 10	  10
+					 10	  10
+					 10	  10
+					 10	  2
 					 
 Number of Rmatch Points    NumNewSectors  
        100                      0
