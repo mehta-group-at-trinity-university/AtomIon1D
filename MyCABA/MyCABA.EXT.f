@@ -2830,23 +2830,23 @@ c     zgesv solves A X = B so in this case S = A^(-1) B, as required.
        call zgesv(NumOpenR,NumOpenR,IJMat,NumOpenR,ipiv,Smatrix,NumOpenR,info)
        call zgemm('C', 'N', NumOpenR, NumOpenR, NumOpenR, (1d0,0d0), Smatrix,
      .      NumOpenR, Smatrix, NumOpenR, (0d0,0d0), test, NumOpenR) ! Check the unitarity of S
-       write(6,*) "test unitarity of S:"
-       call zprintmatrix(test,NumOpenR,NumOpenR,6)
+c       write(6,*) "test unitarity of S:"
+c       call zprintmatrix(test,NumOpenR,NumOpenR,6)
 
        Identity = (0d0,0d0)
        do i = 1, NumOpenR
           Identity(i,i) = (1d0, 0d0)
        enddo
        ! The following check works!  Agrees with the Kmat computed above.
-c$$$       KCheck = II*(Identity - Smatrix)
-c$$$       test = Identity + Smatrix
-c$$$       call zgesv(NumOpenR,NumOpenR,test,NumOpenR,ipiv,KCheck,NumOpenR,info)       
-c$$$       write(6,*) "K-Matrix as computed from S:"
-c$$$       call zprintmatrix(KCheck,NumOpenR,NumOpenR,6)
+c       KCheck = II*(Identity - Smatrix)
+c       test = Identity + Smatrix
+c       call zgesv(NumOpenR,NumOpenR,test,NumOpenR,ipiv,KCheck,NumOpenR,info)       
+c       write(6,*) "K-Matrix as computed from S:"
+c       call zprintmatrix(KCheck,NumOpenR,NumOpenR,6)
        
-       write(6,*) "K-Matrix as computed from I,J:"
-       call printmatrix(Kmat,NumOpenR,NumOpenR,6)
-       stop
+c       write(6,*) "K-Matrix as computed from I,J:"
+c       call printmatrix(Kmat,NumOpenR,NumOpenR,6)
+c       stop
 c     calculate T-matrix
 
        do i = 1,NumOpenR

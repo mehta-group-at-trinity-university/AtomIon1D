@@ -86,8 +86,9 @@ program AtomIon1D
   double precision, allocatable :: LUFac(:,:),workl(:)
   double precision, allocatable :: workd(:),Residuals(:)
   double precision, allocatable :: xLeg(:),wLeg(:)
-  double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:), ZAvg(:),Z2Avg(:),Eb(:)
-  double precision, allocatable :: P(:,:,:),QTil(:,:,:),dP(:,:), testmat(:,:),SPsi(:)
+  double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
+  double precision, allocatable :: AsymPCoefBS(:),ZAvg(:),Z2Avg(:),Eb(:)
+  double precision, allocatable :: P(:,:,:),QTil(:,:,:),dP(:,:),testmat(:,:),SPsi(:)
   double precision ur(1:50000),acoef,bcoef,diff
   double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho
   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth
@@ -146,6 +147,12 @@ program AtomIon1D
   Nswap=Nbs-1
 
   allocate(Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs))
+  ! Store the bound-state asympototic P coefficients in a specific order
+  ! Let
+  If(Nbs.gt.1)   allocate(AsymPCoefBS(Nbs*(Nbs-1)/2))  
+
+
+  
   omega = 2d0*Pi*omega
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
@@ -180,12 +187,16 @@ program AtomIon1D
   read(5,*)
   read(5,*)
   read(5,*) ZAvg, Z2Avg
+  read(5,*)
+  read(5,*)
+  read(5,*) AsymPCoefBS
+  
   
   call TestAsymptotics(mu, &
        "AsymV.dat                      ", &
        "AsymVQ.dat                     ", &
        "AsymP.dat                      ", &
-       Eb,ZAvg,Z2Avg,NumOutputChannels,Nbs,thetac,mbeta)
+       Eb,ZAvg,Z2Avg,NumOutputChannels,Nbs,thetac,mbeta,AsymPCoefBS)
 
 !  stop
 
@@ -267,7 +278,7 @@ program AtomIon1D
            AllEnergies(i,iR) = AsymptoticU(mu,i,R(iR),NumStates,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta)
 
            do j=1,NumStates
-              P(i,j,iR)=AsymptoticP(i,j,R(iR),NumStates,Nbs)
+              P(i,j,iR)=AsymptoticP(i,j,R(iR),NumStates,Nbs,AsymPCoefBS)
               Qtil(i,j,iR)=AsymptoticQtil(mu,i,j,R(iR),NumStates,Nbs)
            enddo
         enddo
@@ -352,7 +363,7 @@ program AtomIon1D
         
         !-------- Couplings from the diabatized eigenstates -------------!
         call CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,AllEnergies(:,iR),NewPsi,CB%S,CB%D,&
-             P,QTil(:,:,iR),ncv,countR,R,iR,testmat,Nbs,Rsteps) ! If countR.eq.1 then this will try to fix the phase of P
+             P,QTil(:,:,iR),ncv,countR,R,iR,testmat,Nbs,Rsteps,AsymPCoefBS) ! If countR.eq.1 then this will try to fix the phase of P
 
         OldPsi = CB%Psi
         !    Adjusting Shift
@@ -477,13 +488,14 @@ end subroutine CalcPermutation
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Computes the couplings using the Feynman-Hellmann theorem
 ! Requires the matrix D = <B_i|dH/dR|B_j>, the energies Un and the eigenvector matrix Psi.  
-subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,ncv,countR,R,iR,testmat,Nbs,Rsteps)
+subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,&
+     D,P,QTil,ncv,countR,R,iR,testmat,Nbs,Rsteps,AsymPCoefBS)
   implicit none
   integer NumStates,HalfBandWidth,MatrixDim,ncv,countR,Nbs,Rsteps,iR
   double precision Psi(MatrixDim,ncv),U(NumStates,2),testmat(NumStates,NumStates),R(RSteps)
   double precision S(HalfBandWidth+1,MatrixDim),D(HalfBandWidth+1,MatrixDim),testorth
   double precision P(NumStates,NumStates,RSteps),QTil(NumStates,NumStates)
-  double precision aP
+  double precision aP, AsymPCoefBS(Nbs*(Nbs-1)/2)
   integer i,j,k,n,m,ndelay
   double precision, external :: ddot 
   double precision, allocatable :: TempPsi(:,:),SPsi(:), DPsi(:)
@@ -510,7 +522,7 @@ subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,D,P,QTil,nc
            endif
         endif
         if((countR.lt.ndelay).and.(n.gt.(NumStates-2*Nbs)).and.(m.gt.(NumStates-2*Nbs))) then
-           P(n,m,iR)=AsymptoticP(n,m,R(iR),NumStates,Nbs)
+           P(n,m,iR)=AsymptoticP(n,m,R(iR),NumStates,Nbs,AsymPCoefBS)
            testmat(n,m)=1d0
            write(6,*) "*** countR,  AsymptoticP = ", countR, n,m, P(n,m,iR)
         endif
@@ -1870,30 +1882,43 @@ double precision function AsymptoticVQ(mu,mi,ni,R,NC,Nbs)
   
 end function AsymptoticVQ
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-double precision function AsymptoticP(mi,ni,R,NC,Nbs)
+double precision function AsymptoticP(mi,ni,R,NC,Nbs,AsymPCoefBS)
   implicit none
   
-  integer m,n,NC,Nbs,mi,ni
-  double precision R
+  integer m,n,NC,Nbs,mi,ni,ichoose
+  double precision R, AsymPCoefBS(Nbs*(NBs-1)/2)
   double precision, external :: kdelta
   m=mi-1
   n=ni-1
   AsymptoticP = 0d0
-  if((mi.ne.ni).and.(mi.le.NC-2*Nbs).and.(ni.le.NC-2*Nbs)) then
+  ichoose=1
+  if((mi.ne.ni).and.(mi.le.NC-2*Nbs).and.(ni.le.NC-2*Nbs)) then  ! For all couplings between collision channels
      AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
      AsymptoticP = AsymptoticP/R
-  else if((mi.ne.ni).and.(mi.gt.NC-2*Nbs).and.(ni.gt.NC-2*Nbs)) then
+  else if((mi.ne.ni).and.(mi.gt.NC-2*Nbs).and.(ni.gt.NC-2*Nbs)) then ! For all couplings between molecular ion complex channels
      if(abs(mi-ni).eq.2) then
-        AsymptoticP = 1d0/(sqrt(2d0)*R)
+        if((mi.eq.NC-2*Nbs+1).or.(ni.eq.NC-2*Nbs+1).or.(mi.eq.NC-2*Nbs+2).or.(ni.eq.NC-2*Nbs+2)) then
+           ichoose = 1
+           AsymptoticP = AsymPCoefBS(ichoose)/R
+        else if((mi.eq.NC-2*Nbs+3).or.(ni.eq.NC-2*Nbs+3).or.(mi.eq.NC-2*Nbs+4).or.(ni.eq.NC-2*Nbs+4)) then
+           ichoose = 3
+           AsymptoticP = AsymPCoefBS(ichoose)/R
+        endif
+     else if(abs(mi-ni).eq.4) then
+        if((mi.eq.NC-2*Nbs+1).or.(ni.eq.NC-2*Nbs+1).or.(mi.eq.NC-2*Nbs+2).or.(ni.eq.NC-2*Nbs+2)) then
+           ichoose = 2
+           AsymptoticP = AsymPCoefBS(ichoose)/R
+        endif
      endif
   endif
   
+  
 end function AsymptoticP
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine TestAsymptotics(mu,fileV,fileVQ,fileP,Eb,ZAvg,Z2Avg,NC,Nbs,thetac,mbeta)
+subroutine TestAsymptotics(mu,fileV,fileVQ,fileP,Eb,ZAvg,Z2Avg,NC,Nbs,thetac,mbeta,AsymPCoefBS)
   implicit none
   integer m, n, NR, iR, NC, Nbs
-  double precision R1,R2,mu,thetac,mbeta,Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs)
+  double precision R1,R2,mu,thetac,mbeta,Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs),AsymPCoefBS(Nbs*(Nbs-1)/2)
   double precision, allocatable :: R(:)
   CHARACTER*20 fileV,fileVQ,fileP
  ! CHARACTER(LEN=64) :: fileV,fileVQ,fileP
@@ -1916,7 +1941,7 @@ subroutine TestAsymptotics(mu,fileV,fileVQ,fileP,Eb,ZAvg,Z2Avg,NC,Nbs,thetac,mbe
   call GridMaker(R,NR,R1,R2,"linear")
   do iR=1,NR
      write(900,*) R(iR), (R(iR)*R(iR)*AsymptoticU(mu,n,R(iR),NC,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta), n=1,NC)
-     write(901,*) R(iR), ((R(iR)*AsymptoticP(m,n,R(iR),NC,Nbs), n=m,NC), m=1,NC)
+     write(901,*) R(iR), ((R(iR)*AsymptoticP(m,n,R(iR),NC,Nbs,AsymPCoefBS), n=m,NC), m=1,NC)
      !write(fileVQ,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR)), n=m,NC), m=1,NC)
      write(902,*) R(iR), ((R(iR)*R(iR)*AsymptoticQtil(mu,m,n,R(iR),NC,Nbs), n=m,NC), m=1,NC)
   enddo
