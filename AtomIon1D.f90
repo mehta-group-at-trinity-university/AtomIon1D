@@ -149,10 +149,8 @@ program AtomIon1D
   allocate(Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs))
   ! Store the bound-state asympototic P coefficients in a specific order
   ! Let
-  If(Nbs.gt.1)   allocate(AsymPCoefBS(Nbs*(Nbs-1)/2))  
+  If(Nbs.gt.1) allocate(AsymPCoefBS(Nbs*(Nbs-1)/2))  
 
-
-  
   omega = 2d0*Pi*omega
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
@@ -1891,7 +1889,7 @@ double precision function AsymptoticP(mi,ni,R,NC,Nbs,AsymPCoefBS)
   m=mi-1
   n=ni-1
   AsymptoticP = 0d0
-  ichoose=1
+
   if((mi.ne.ni).and.(mi.le.NC-2*Nbs).and.(ni.le.NC-2*Nbs)) then  ! For all couplings between collision channels
      AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
      AsymptoticP = AsymptoticP/R
