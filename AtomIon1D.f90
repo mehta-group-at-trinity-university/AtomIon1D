@@ -96,6 +96,8 @@ program AtomIon1D
   character*64 LegendreFile
   double precision, external :: AsymptoticP, AsymptoticVQ, AsymptoticU, AsymptoticQtil
 
+  double precision test_shift
+
   common /Rvalue/ Rvalue      
   hbar = 1.054571817d-34
   amu = 1.660539d-27
@@ -149,8 +151,13 @@ program AtomIon1D
   allocate(Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs))
   ! Store the bound-state asympototic P coefficients in a specific order
   ! Let
-  If(Nbs.gt.1) allocate(AsymPCoefBS(Nbs*(Nbs-1)/2))  
+  if(Nbs.gt.1) then 
+      allocate(AsymPCoefBS(Nbs*(Nbs-1)/2)) 
+  else if(Nbs.le.1) then 
+      allocate(AsymPCoefBS(1))
+  endif
 
+  
   omega = 2d0*Pi*omega
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
@@ -190,15 +197,28 @@ program AtomIon1D
   read(5,*) AsymPCoefBS
   
   
-  call TestAsymptotics(mu, &
-       "AsymV.dat                      ", &
-       "AsymVQ.dat                     ", &
-       "AsymP.dat                      ", &
-       Eb,ZAvg,Z2Avg,NumOutputChannels,Nbs,thetac,mbeta,AsymPCoefBS)
+!   call TestAsymptotics(mu, &
+!        "AsymV.dat                      ", &
+!        "AsymVQ.dat                     ", &
+!        "AsymP.dat                      ", &
+!        Eb,ZAvg,Z2Avg,NumOutputChannels,Nbs,thetac,mbeta,AsymPCoefBS)
 
 !  stop
 
   allocate(R(RSteps))
+
+
+  ! ——————————————————————————————————
+  ! THIS IS A TEST ————— (20 Nov 2024)
+  ! ——————————————————————————————————
+!   test_shift = 0.5
+!   testR=sqrt(2d0*(abs(Eb(1))+AsymptoticU(mu,NumStates,24d0,NumStates,1,Eb,ZAvg,Z2Avg,thetac,mbeta))/(mu*cos(thetac)**2))+test_shift
+  
+!   if(RLast.ne.testR) then
+!     RLast = testR
+!   endif 
+  ! ——————————————————————————————————
+
 
   call GridMaker(R,Rsteps,RFirst,RLast,"quadratic")
 
@@ -266,18 +286,52 @@ program AtomIon1D
   CB%Right = Right
   RChange=100.d0
   write(200,*) "#", RSteps, NumOutputChannels
-  countR=0
-  do iR = RSteps,1,-1
-     !     testR=23.6d0
-     testR=sqrt(2d0*(abs(Eb(2))+AsymptoticU(mu,NumStates,24d0,NumStates,2,Eb,ZAvg,Z2Avg,thetac,mbeta))/(mu*cos(thetac)**2))
-!     write(6,*) "testR = ", testR
-     if(R(iR).ge.testR) then  ! Conditional for using asymptotic forms
-        do i=1,NumStates
-           AllEnergies(i,iR) = AsymptoticU(mu,i,R(iR),NumStates,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta)
+  
+  !—————————————————————————————————
+  ! — ADDED BY L.O. ON 19 NOV 2024 —
+  !—————————————————————————————————
+  test_shift = 0d0 ! We should consider reading this from the inpit file
+  if(Nbs.eq.1) then
+   ! test_shift = 9.5d0 ! This worked for phi = 0 
+   test_shift = 0.5d0 ! Working fine with "physical" phi but not for phi = 0 
+  endif
+  ! Adding a small shift in the case of Nbs=1 makes it work, but it might be an unstable solution (L.O., 19 Nov 2024)
+  ! In the case of Nbs=0, however, we have to rely on the numerical calculation.
+  if(Nbs.eq.0) then
+   testR = RLast
+  ! THIS IS NOT WORKING
+  else
+   testR=sqrt(2d0*(abs(Eb(1))+AsymptoticU(mu,NumStates,24d0,NumStates,1,Eb,ZAvg,Z2Avg,thetac,mbeta))/(mu*cos(thetac)**2))+test_shift
+  endif
+  !—————————————————————————————————
 
-           do j=1,NumStates
+  countR = 0
+  testmat = 1d0
+  do iR = RSteps,1,-1
+      ! testR=23.6d0
+      ! testR=sqrt(2d0*(abs(Eb(2))+AsymptoticU(mu,NumStates,24d0,NumStates,2,Eb,ZAvg,Z2Avg,thetac,mbeta))/(mu*cos(thetac)**2))
+      ! testR=sqrt(2d0*(abs(Eb(1))+AsymptoticU(mu,NumStates,24d0,NumStates,1,Eb,ZAvg,Z2Avg,thetac,mbeta))/(mu*cos(thetac)**2))
+      ! write(6,*) "testR = ", testR
+     if(R(iR).ge.testR) then  ! Conditional for using asymptotic forms
+        do j=1,NumStates
+           AllEnergies(j,iR) = AsymptoticU(mu,j,R(iR),NumStates,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta)
+           Qtil(j,j,iR)=AsymptoticQtil(mu,j,j,R(iR),NumStates,Nbs)
+           P(j,j,iR) = 0d0
+           do i=j+1,NumStates
+              ! The sign of AsymptoticP depends on i and j for collisional channels:
               P(i,j,iR)=AsymptoticP(i,j,R(iR),NumStates,Nbs,AsymPCoefBS)
+              ! but not for molecular states. Hence, I have to manually multiply
+              ! by -1 to make the matrix antisymmetric in this case: 
+!!$               if((i.ge.j).and.(i.gt.(NumStates-2*Nbs)).and.(j.gt.(NumStates-2*Nbs))) then
+!!$                  P(i,j,iR)=AsymptoticP(i,j,R(iR),NumStates,Nbs,AsymPCoefBS)
+!!$               elseif ((j.ge.i).and.(i.gt.(NumStates-2*Nbs)).and.(j.gt.(NumStates-2*Nbs))) then
+!!$                  P(i,j,iR)=-AsymptoticP(i,j,R(iR),NumStates,Nbs,AsymPCoefBS)
+!!$               endif
+               ! (L.O. 20 Nov 2024)
               Qtil(i,j,iR)=AsymptoticQtil(mu,i,j,R(iR),NumStates,Nbs)
+              P(j,i,iR) = - P(i,j,iR)
+              Qtil(j,i,iR) = Qtil(i,j,iR)
+              
            enddo
         enddo
         
@@ -381,8 +435,9 @@ program AtomIon1D
      !Now write the energies and couplings for quick checks. These are for easy plotting to xmgrace.
      !--------------------------------------------
      write(203, 20) R(iR), (CB%Energies(i,1), i = 1,NumStates) ! writing adiabatic (undiabatized) energies
-     write(103,*) R(iR), ((P(WriteChannels(i),WriteChannels(j),iR), &
-          i=j+1,NumOutputChannels), j=1,NumOutputChannels)
+!     write(103,*) R(iR), ((P(WriteChannels(i),WriteChannels(j),iR), &
+!          i=j+1,NumOutputChannels), j=1,NumOutputChannels)
+     write(103,*) R(iR), (P(WriteChannels(1),WriteChannels(j),iR), j=1,NumOutputChannels)
      write(104,*) R(iR),(AllEnergies(writechannels(i),iR) - 0.25d0/(2d0*mu*R(iR)**2) &
           + QTil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu),i=1,NumOutputChannels)
      write(106,*) R(iR), (Qtil(WriteChannels(i),WriteChannels(i),iR)/(2d0*mu), i=1, NumOutputChannels)
@@ -393,8 +448,8 @@ program AtomIon1D
   enddo
   
   do iR = 1, RSteps
-     !     write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies
-     write(200,11) R(iR), (AllEnergies(i,iR), i = 1,NumStates) ! Write the diabatized energies      
+     write(200,11) R(iR), (AllEnergies(WriteChannels(i),iR), i = 1,NumOutPutChannels) ! Write the diabatized energies
+   !   write(200,11) R(iR), (AllEnergies(i,iR), i = 1,NumOutputChannels) ! Write the diabatized energies      
      write(101,11) R(iR)
      write(102,11) R(iR)
      write(105,11) R(iR)
@@ -503,35 +558,43 @@ subroutine CalcCoupling_FH(NumStates,HalfBandWidth,MatrixDim,U,Psi,S,&
   TempPsi = Psi
   P(:,:,iR)=0d0
   ndelay=30
+
   do m = 1,NumStates
      call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,D,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,DPsi,1)   ! Calculate the vector D*Psi(m) and store in DPsi
      call dsbmv('U',MatrixDim,HalfBandWidth,1.0d0,S,HalfBandWidth+1,TempPsi(:,m),1,0.0d0,SPsi,1)  ! Calculate the vector S*Psi(m) and store in SPsi 
-     do n = m+1,NumStates
+     do n = m+1,NumStates ! Compute the lower triangle since row is greater than column here.
         testorth=ddot(MatrixDim,TempPsi(:,n),1,SPsi,1)
         !write(6,*) n,m, '   testorth=',testorth
         aP = 1d0/(U(m,1) - U(n,1))
         P(n,m,iR) = aP*ddot(MatrixDim,TempPsi(:,n),1,DPsi,1)
-
-        if((countR.eq.1).and.(n.le.(NumStates-2*Nbs)).and.(m.le.(NumStates-2*Nbs))) then
-        !if((countR.eq.1)) then
+        
+!----------------------------------------------------------------------
+        if((countR.eq.1).and.(n.le.(NumStates-2*Nbs)).and.(m.le.(NumStates-2*Nbs))) then 
+        ! Collisional channels only
            testmat(n,m)=1d0
            if(P(n,m,iR)*P(n,m,iR+1).lt.0d0) then ! Fix the phase with respect to the asymptotic form
               testmat(n,m) = -1d0
            endif
         endif
         if((countR.lt.ndelay).and.(n.gt.(NumStates-2*Nbs)).and.(m.gt.(NumStates-2*Nbs))) then
+        ! Molecular channels at (Rtest-ndelay) < R <= Rtest
            P(n,m,iR)=AsymptoticP(n,m,R(iR),NumStates,Nbs,AsymPCoefBS)
-           testmat(n,m)=1d0
-           write(6,*) "*** countR,  AsymptoticP = ", countR, n,m, P(n,m,iR)
+           ! Here I am in the lower triangle because n > m, which meant that
+           ! I had to multiply by -1 because of how I was defining the lower
+           ! triangle in line 323. Now I fixed it.   (L.O. 20 Nov 2024)
+           !write(6,*) "*** countR,  AsymptoticP = ", countR, n,m, P(n,m,iR)
         endif
         if((countR.eq.ndelay).and.(n.gt.(NumStates-2*Nbs)).and.(m.gt.(NumStates-2*Nbs))) then
+        ! Molecular channels at R = (Rtest-ndelay)
            testmat(n,m)=1d0
            if(P(n,m,iR)*P(n,m,iR+ndelay).lt.0d0) then ! Fix the phase with respect to the asymptotic form
               testmat(n,m) = -1d0
            endif
         endif
 
-        P(n,m,iR) = testmat(n,m)*P(n,m,iR)
+
+        
+        P(n,m,iR) = testmat(n,m)*P(n,m,iR) 
         P(m,n,iR) = -P(n,m,iR)
      enddo
   enddo
@@ -1889,7 +1952,7 @@ double precision function AsymptoticP(mi,ni,R,NC,Nbs,AsymPCoefBS)
   m=mi-1
   n=ni-1
   AsymptoticP = 0d0
-
+  ichoose=1
   if((mi.ne.ni).and.(mi.le.NC-2*Nbs).and.(ni.le.NC-2*Nbs)) then  ! For all couplings between collision channels
      AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
      AsymptoticP = AsymptoticP/R
@@ -1913,38 +1976,38 @@ double precision function AsymptoticP(mi,ni,R,NC,Nbs,AsymPCoefBS)
   
 end function AsymptoticP
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-subroutine TestAsymptotics(mu,fileV,fileVQ,fileP,Eb,ZAvg,Z2Avg,NC,Nbs,thetac,mbeta,AsymPCoefBS)
-  implicit none
-  integer m, n, NR, iR, NC, Nbs
-  double precision R1,R2,mu,thetac,mbeta,Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs),AsymPCoefBS(Nbs*(Nbs-1)/2)
-  double precision, allocatable :: R(:)
-  CHARACTER*20 fileV,fileVQ,fileP
- ! CHARACTER(LEN=64) :: fileV,fileVQ,fileP
-  double precision, external :: AsymptoticP, AsymptoticVQ, AsymptoticU, AsymptoticQtil
+! subroutine TestAsymptotics(mu,fileV,fileVQ,fileP,Eb,ZAvg,Z2Avg,NC,Nbs,thetac,mbeta,AsymPCoefBS)
+!   implicit none
+!   integer m, n, NR, iR, NC, Nbs
+!   double precision R1,R2,mu,thetac,mbeta,Eb(Nbs),ZAvg(Nbs),Z2Avg(Nbs),AsymPCoefBS(Nbs*(Nbs-1)/2)
+!   double precision, allocatable :: R(:)
+!   CHARACTER*20 fileV,fileVQ,fileP
+!  ! CHARACTER(LEN=64) :: fileV,fileVQ,fileP
+!   double precision, external :: AsymptoticP, AsymptoticVQ, AsymptoticU, AsymptoticQtil
 
-  OPEN(unit=900,file=fileV(1:INDEX(fileP,' ')-1))
-  OPEN(unit=901,file=fileVQ(1:INDEX(fileVQ,' ')-1))
-  OPEN(unit=902,file=fileP(1:INDEX(fileP,' ')-1))
+!   OPEN(unit=900,file=fileV(1:INDEX(fileP,' ')-1))
+!   OPEN(unit=901,file=fileVQ(1:INDEX(fileVQ,' ')-1))
+!   OPEN(unit=902,file=fileP(1:INDEX(fileP,' ')-1))
 
   
-!  OPEN(unit=900,file=fileV)
-!  OPEN(unit=901,file=fileVQ)
-!  open(unit=902, file=fileP)
+! !  OPEN(unit=900,file=fileV)
+! !  OPEN(unit=901,file=fileVQ)
+! !  open(unit=902, file=fileP)
 
-  NR=1000
-  R1=10.d0
-  R2=200.d0
+!   NR=1000
+!   R1=10.d0
+!   R2=200.d0
 
-  allocate(R(NR))
-  call GridMaker(R,NR,R1,R2,"linear")
-  do iR=1,NR
-     write(900,*) R(iR), (R(iR)*R(iR)*AsymptoticU(mu,n,R(iR),NC,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta), n=1,NC)
-     write(901,*) R(iR), ((R(iR)*AsymptoticP(m,n,R(iR),NC,Nbs,AsymPCoefBS), n=m,NC), m=1,NC)
-     !write(fileVQ,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR)), n=m,NC), m=1,NC)
-     write(902,*) R(iR), ((R(iR)*R(iR)*AsymptoticQtil(mu,m,n,R(iR),NC,Nbs), n=m,NC), m=1,NC)
-  enddo
+!   allocate(R(NR))
+!   call GridMaker(R,NR,R1,R2,"linear")
+!   do iR=1,NR
+!      write(900,*) R(iR), (R(iR)*R(iR)*AsymptoticU(mu,n,R(iR),NC,Nbs,Eb,ZAvg,Z2Avg,thetac,mbeta), n=1,NC)
+!      write(901,*) R(iR), ((R(iR)*AsymptoticP(m,n,R(iR),NC,Nbs,AsymPCoefBS), n=m,NC), m=1,NC)
+!      !write(fileVQ,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR)), n=m,NC), m=1,NC)
+!      write(902,*) R(iR), ((R(iR)*R(iR)*AsymptoticQtil(mu,m,n,R(iR),NC,Nbs), n=m,NC), m=1,NC)
+!   enddo
   
-end subroutine TestAsymptotics
+! end subroutine TestAsymptotics
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE printmatrix(M,nr,nc,file)
   IMPLICIT NONE

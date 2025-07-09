@@ -196,20 +196,23 @@ c     RADIAL GRID
       enddo
 
       Pi = dacos(-1.d0)
-      wlenght = 2.d0*Pi/dsqrt(2.d0*Mass*(Emax-Thresholds(1)))
-      rstep = wlenght/dfloat(npwave) 
+      NPointsW=0
+      !---------------------------------------------------------------------------
+      ! NPM: Commenting out this part that does the extrapolation for now.
+c      wlenght = 2.d0*Pi/dsqrt(2.d0*Mass*(Emax-Thresholds(1)))
+c      rstep = wlenght/dfloat(npwave) 
 
-      NPointsW = nint((Rf-WhereStart)/rstep)+1
-      do iR = 1,NPointsW
-         R(iR+NPoints) = WhereStart+(iR)*rstep
-      enddo
+c      NPointsW = nint((Rf-WhereStart)/rstep)+1
+c      do iR = 1,NPointsW
+c         R(iR+NPoints) = WhereStart+(iR)*rstep
+c      enddo
 
-      if (R(NPoints)-R(Npoints-1).gt.R(NPoints+1)-R(Npoints)) then
-         write(*,*)'Step size bigger than the extrapolation step'
-         write(*,*)'... Increase NPoints ...'
-         write(*,*)'Program STOPED'
-         stop
-      endif   
+c      if (R(NPoints)-R(Npoints-1).gt.R(NPoints+1)-R(Npoints)) then
+c         write(*,*)'Step size bigger than the extrapolation step'
+c         write(*,*)'... Increase NPoints ...'
+c         write(*,*)'Program STOPED'
+c         stop
+c      endif   
 
       NumSectorsTot = NPoints+NPointsW
 
@@ -563,9 +566,9 @@ c            stop
          call cpu_time(timep)
          P = nint((1d0 + (-1)**ithresh*Parity)/2)
          if(P.eq.1) then
-            ascat = 1d0/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh)) !a=1/(k tandelta) for P=1
+            ascat = 1d0/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))*KmatrixAvg(ithresh,ithresh)) !a=1/(k tan(delta)) for P=1
          else if(P.eq.0) then
-            ascat = -KmatrixAvg(ithresh,ithresh)/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))) ! a = -k/tandel for P=0
+            ascat = -KmatrixAvg(ithresh,ithresh)/(dsqrt(2.0d0*Mass*(Energy-Thresholds(ithresh)))) ! a = -tan(delta)/k for P=0
          endif
          phaseshift = atan(KmatrixAvg(ithresh,ithresh))
 
@@ -2792,7 +2795,9 @@ c-------------------------------------------------------------------------------
       do i=1,NumOpenR         
          kVector(i) = dsqrt(2.0d0*Mass*(Energy-Thresholds(i)))
          x = kVector(i)*Rmatch
-         P = (1d0 + Parity*(-1d0)**(i-1))/2d0
+         !P = (1d0 + Parity*(-1d0)**(i-1))/2d0
+!     P=0d0;
+         P=1d0;
          enorm(i) = dsqrt(Mass/(2d0*pi*kVector(i)))
          f = enorm(i)*sin(x + P*0.5d0*pi)
          fp = enorm(i)*kVector(i)*cos(x + P*0.5d0*pi)
