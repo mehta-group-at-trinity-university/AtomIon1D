@@ -1,0 +1,47 @@
+Legendre File
+Legendre.dat
+
+Legendre Points   GridSwitch (R value to switch to linear grid) SwitchFlag
+    10              70.d0											1
+
+ J    Emin (hbar omega)     Emax       NumE   Incident Threshold	  Parity
+ 0    0.001d0    	       0.01d0    1200           1      		  1
+
+ ma     		mi 
+ 6.015122d0  	170.9363230d0        
+
+NumChannels  NumOpenChannels(Box1)     Number of Adiabatic Boxes
+    14             14                           10
+
+Channels Open in Adiabatic Boxes:     NumOpenL NumOpenR
+                                        0     14
+					 					14	  14
+					 					14	  14
+					 					14	  14
+					 					14	  14
+					 					14	  14					 
+					 					14	  14
+					 					14	  14
+					 					14	  14
+					 					14	  1
+					 
+Number of Rmatch Points    NumNewSectors  
+       20                      1
+
+Effective L              Threshold
+ 0.0d0                     0.5d0
+
+Pmatrix File
+Pmat.dat
+ 
+V & Qmatrix File
+VQmat.dat
+ 
+File with R limits and energy thresholds
+ParAndThresh.dat
+
+NumPoints to Interpolate (R < GridShift) 
+3000      !(using the non-linear grid R^3)
+
+NumPoints in per wave length 
+6         !(will determine the radial step)

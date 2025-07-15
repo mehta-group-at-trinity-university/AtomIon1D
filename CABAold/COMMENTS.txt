@@ -1,0 +1,41 @@
+xdata         -> radial grid from the output of AtomIon1D;
+NumSectorsTot -> number of total points in the radial grid;
+NumDataPoints -> number of hyperradial points from the output of AtomIon1D;
+
+NumChannels   -> number of channels as indicated in the CABA input file;
+NumTotStates  -> number of channels from the output of AtomIon1D;
+
+
+
+    Things to talk about:
+- linear grid?
+- why is Ri different from RFirst?
+- how to check fit?
+
+
+
+    MODIFIED by L.O. 22 Nov 2024:
+Added an if statement at line 194 that makes Rf = WhereStart. Combined with 
+the if at line 175, the last point of the radial grid created inside MyCABA  
+is the same as the one in AtomIon1D.
+
+
+    Convergence checks 10 December 2024:
+I am running AtomIon1D with Rf = 100 and Rf = 200. The potentials and couplings
+look very well converged. However, when I run MyCABA without without fit I get
+very different results (shifted resonance). Moreover, when I restore the fit,
+nothing changes. 
+
+Example: 
+RLast = 100 with Rsteps = 1000 and NPoints = 2000 in the CABA without fit gives
+the same as NPoints = 2000, WhereStart = 50 and Rf = 200 in the MyCABA. HOWEVER 
+it is different than RLast = 200 with Rsteps = 2000 fitted with NPoints = 2000, 
+WhereStart = 50 and Rf = 200 (which agrees with NPoints = 6000 and no fit).
+
+One thing we learn, though, is that it seems more efficient to use the fit
+because it allows to keep NPoints lower. 
+
+
+- fix Ri
+- change grid in such a way that its cubic first and then linear
+- get rid of fitprogram

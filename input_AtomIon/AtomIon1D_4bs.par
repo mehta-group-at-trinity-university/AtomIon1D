@@ -1,0 +1,41 @@
+Number of energies		   AsymptoticFlag 
+      40       			        1
+
+Legendre File
+Legendre.dat
+
+Legendre Points
+     10
+
+ Shift	      Shift2	Order     Left	  Right 
+-2000.0d0     -0.01d0        	 5          0	    0
+
+   alpha          mi          	      ma	         DD         L
+  1.0000d0       170.9363230d0        6.015122d0        1.0d0    1.0d0
+
+xPoints    f-omega     Nbs	      C4     	     phi			Dtol
+1200 	      3.2d5	      4         2.803d-57 	  -0.998665d0	      0.2d0
+
+RSteps   RDerivDelt     RFirst    	      RLast		  OPGRID
+ 2000       0.05d0      0.20d0    	     400.0d0		  0
+
+NumOutputChannels
+16
+
+Output channels
+1    2	  3	   4    5    6	  7	   8    33    34    35   36   37	38   39   40
+
+2-body eigenenergies
+-17.0507d0	  -363.212d0    -2091.53d0   -7948.25d0
+
+Avg 2-body z						                    Avg 2-body z^2
+1.89926d0    0.869312d0    0.576092d0   0.434183d0		3.99676d0    0.793716d0   0.340706d0  0.190273d0
+
+(38,40)&(37,39)    (36,40)&(35,39)   (36,38)&(35,37)   (34,40)&(33,39)     (34,38)&(33,37)     (34,36)&(33,35)	 Asymptotic P = Aij/R between molecular ion states 
+    2.12464           -0.415414         -1.6798            -0.0817816          -0.277579 	         0.863985     
+
+
+! Pi/2=1.5707963267948966
+! Pi/6=0.52359877559829882
+
+0.853138729379683d0
