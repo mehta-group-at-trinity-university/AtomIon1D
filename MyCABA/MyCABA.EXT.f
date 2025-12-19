@@ -2849,7 +2849,7 @@ c       call zgesv(NumOpenR,NumOpenR,test,NumOpenR,ipiv,KCheck,NumOpenR,info)
 c       write(6,*) "K-Matrix as computed from S:"
 c       call zprintmatrix(KCheck,NumOpenR,NumOpenR,6)
        
-c       write(6,*) "K-Matrix as computed from I,J:"
+C       Write(6,*) "K-Matrix as computed from I,J:"
 c       call printmatrix(Kmat,NumOpenR,NumOpenR,6)
 c       stop
 c     calculate T-matrix
