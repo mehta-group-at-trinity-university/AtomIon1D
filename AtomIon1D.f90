@@ -958,7 +958,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
         xai = mu**(-0.5d0)*sinx(lx,kx) - (mu**0.5d0)*cosx(lx,kx) 
         XX(lx,kx) = cosx(lx,kx)**2
         YY(lx,kx) = C4/(xai**4)
-        potvalue = -YY(lx,kx)/R**4*tanh((R*xai/(2d0*atest))**4) + c0*exp(-(R*xai/atest)**2) + 0.5d0*mu*R*R*XX(lx,kx)
+        potvalue = -(YY(lx,kx)/R**4)*tanh((R*xai/(2d0*atest))**4) + c0*exp(-(R*xai/atest)**2) + 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
         CB%V(lx,kx) = alpha*potvalue
         !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
@@ -981,17 +981,17 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
               a = wLeg(lx)*xIntScale(kx)*u(lx,kx,ix) !bra
               xTempS = xTempS + a*u(lx,kx,ixp)
               xTempT = xTempT + a*uxx(lx,kx,ixp) !KE operator !ket
-              xTempVHO = xTempVHO + a*XX(lx,kx)*u(lx,kx,ixp) ! Matrix elements of cos^2(theta)
-              xTempVC4 = xTempVC4 + a*YY(lx,kx)*u(lx,kx,ixp) ! Matrix elements of C4/xia^4 (just the angular part)
-              !xTempV = xTempV + a*Pot(lx,kx)*u(lx,kx,ixp) !PE operator ket
+              !xTempVHO = xTempVHO + a*XX(lx,kx)*u(lx,kx,ixp) ! Matrix elements of cos^2(theta)
+              !xTempVC4 = xTempVC4 + a*YY(lx,kx)*u(lx,kx,ixp) ! Matrix elements of C4/xia^4 (just the angular part)
+              xTempV = xTempV + a*Pot(lx,kx)*u(lx,kx,ixp) !PE operator ket
            enddo
            xT(ix,ixp) = xT(ix,ixp) + xTempT
            xS(ix,ixp) = xS(ix,ixp) + xTempS
-           !xV(ix,ixp) = xV(ix,ixp) + xTempV
-           xVHO(ix,ixp) = xVHO(ix,ixp) + xTempVHO 
-           xVC4(ix,ixp) = xVC4(ix,ixp) + xTempVC4
+           xV(ix,ixp) = xV(ix,ixp) + xTempV
+           !xVHO(ix,ixp) = xVHO(ix,ixp) + xTempVHO 
+           !xVC4(ix,ixp) = xVC4(ix,ixp) + xTempVC4
         enddo
-        xV(ix,ixp) = 0.5d0*mu*R*R*xVHO(ix,ixp) - R**(-4)*xVC4(ix,ixp)
+        !xV(ix,ixp) = 0.5d0*mu*R*R*xVHO(ix,ixp) - R**(-4)*xVC4(ix,ixp)
      enddo
   enddo
 
@@ -1006,7 +1006,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
            NewRow = HalfBandWidth+1+Row-Col
            S(NewRow,Col) = xS(ix,ixp)
            H(NewRow,Col) = (m*xT(ix,ixp)+xV(ix,ixp))
-           D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
+           !D(NewRow,Col) = xT(ix,ixp)/(mu*R**3) + mu*R*xVHO(ix,ixp) + (4d0/R**5)*xVC4(ix,ixp)
            !                write(6,*) 'THIS IS A TEST', ix,ixp,H(NewRow,Col) !!all info stored now in H
         endif
      enddo
