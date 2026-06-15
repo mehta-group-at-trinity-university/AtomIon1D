@@ -17,7 +17,7 @@ xPoints    f-omega 	     Nbs	      C4     	      		 phi			Dtol		atest	c0
 200 	   3.2d5	     2                1.121d-56 	  -0.106877437			0.2d0		0.07d0	8896.72d0
 
  RSteps   RDerivDelt     RFirst    	      RLast		  OPGRID
-  400       0.05d0      0.75d0    	      50.0d0		  0
+  400       0.05d0      0.1d0    	      50.0d0		  0
 
 NumOutputChannels
 10
