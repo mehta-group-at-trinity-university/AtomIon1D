@@ -89,7 +89,7 @@ program AtomIon1D
   double precision, allocatable :: NewPsi(:,:),TempEnergies(:,:)
   double precision, allocatable :: P(:,:,:),QTil(:,:,:),dP(:,:), testmat(:,:),SPsi(:)
   double precision ur(1:50000),acoef,bcoef,diff
-  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho,atest,c0
+  double precision sec,time,Rinitial,secp,timep,Rvalue, sNb, sbc, C4,lho,atest,lam,c2,d2,e2
   double precision hbar, phi, amu,omega,Rstar, dum,Dtol,testorth,Estar
   double precision, external :: ddot, kdelta
   character*64 LegendreFile
@@ -138,13 +138,16 @@ program AtomIon1D
   ! read in grid information, atest is the length scale of the short-range effective potential in units of Rstar
   read(5,*)
   read(5,*)
-  read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol, atest, c0
-  write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol, atest, c0
+  read(5,*) xNumPoints, omega, Nbs, C4, phi,Dtol, atest, lam, c2, d2, e2
+  write(6,*) xNumPoints, omega, Nbs, C4, phi,Dtol, atest, lam, c2, d2, e2
 
   omega = 2d0*Pi*omega
   lho = dsqrt(hbar/mi/omega)
   Rstar = dsqrt(2*mu12*C4/hbar**2)
   Estar = hbar**2/(2d0*mu12*Rstar**2)
+  ! Convert lam from 1/Rstar (TuneVeff natural units) to oscillator units (1/lho)
+  ! Done here, right after lho and Rstar are available; c2,d2,e2 are dimensionless and need no conversion.
+  lam = lam * lho/Rstar
   C4 = C4/(hbar*omega*lho**4)  ! Convert C4 to oscillator units here.
   sNb = 1.d0/(dble(Nbs+1)*Pi + phi) !We use Nbs+1 here since the scattering length (and therefore phi=1/a) is negative. 
 
@@ -157,9 +160,8 @@ program AtomIon1D
   ma = ma/mi
   mi = 1d0
   mu12=mi*ma/(mi+ma)  ! ion-atom reduced mass (mu remains unchanged)
-  ! convert atest to oscillator units
+  ! convert atest (= breg/2) from Rstar to lho units; lam already converted above
   atest = atest*Rstar/lho
-  c0 = c0*Estar/(hbar*omega)
   read(5,*)
   read(5,*)
   read(5,*) RSteps,RDerivDelt,RFirst,RLast, OPGRID
@@ -271,7 +273,7 @@ program AtomIon1D
      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,0,CB%u)
      call CalcBasisFuncs(CB%Left,CB%Right,Order,xPoints,LegPoints,xLeg,CB%xDim,CB%xBounds,xNumPoints,2,CB%uxx)
      call CalcHSD(alpha,R(iR),mu,mi,theta_c,C4,L,Order,xPoints,&
-          LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB,atest,c0)
+          LegPoints,xLeg,wLeg,CB%xDim,xNumPoints,CB%u,CB%uxx,CB%xBounds,HalfBandWidth,CB%H,CB%S,CB%D,CB,atest,lam,c2,d2,e2)
      call MyDsband(LSelect,CB%Energies,CB%Psi,MatrixDim,Shift,MatrixDim,CB%H,CB%S,HalfBandWidth+1,LUFac,LeadDim,HalfBandWidth,&
           NumStates,Tol,Residuals,ncv,CB%Psi,MatrixDim,iparam,workd,workl,ncv*ncv+8*ncv,iwork,info)
      call CalcEigenErrors(info,iparam,MatrixDim,CB%H,HalfBandWidth+1,CB%S,HalfBandWidth,NumStates,CB%Psi,CB%Energies,ncv)
@@ -891,7 +893,7 @@ end subroutine CalcOverlap
 ! In the case of CB%x and CB%V the asignment is made directly through CB.
 !
 subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
-     xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D,CB,atest,c0)
+     xLeg,wLeg,xDim,xNumPoints,u,uxx,xBounds,HalfBandWidth,H,S,D,CB,atest,lam,c2,d2,e2)
   use BasisSets
   implicit none
   TYPE(basis) CB
@@ -906,7 +908,7 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
   integer Row,NewRow,Col
   integer, allocatable :: kxMin(:,:),kxMax(:,:)
   double precision a,b,m,Pi
-  double precision Rall,rai,xai,atest,c0
+  double precision Rall,rai,xai,atest,lam,c2,d2,e2,lr2
   double precision u1,sys_ss_pot,V12,V23,V31
   double precision VInt,VTempInt,potvalue, xTempV,xTempS
   double precision x,ax,bx,xScaledZero,xTempT,xTempVHO,xTempVC4
@@ -958,7 +960,10 @@ subroutine CalcHSD(alpha,R,mu,mi,theta_c,C4,L,Order,xPoints,LegPoints,&
         xai = mu**(-0.5d0)*sinx(lx,kx) - (mu**0.5d0)*cosx(lx,kx) 
         XX(lx,kx) = cosx(lx,kx)**2
         YY(lx,kx) = C4/(xai**4)
-        potvalue = -(YY(lx,kx)/R**4)*tanh((R*xai/(2d0*atest))**4) + c0*exp(-(R*xai/atest)**2) + 0.5d0*mu*R*R*XX(lx,kx)
+        lr2 = (lam*R*xai)**2
+        potvalue = -(YY(lx,kx)/R**4)*tanh((R*xai/(2d0*atest))**4) &
+                   + lam**2*((c2-2d0*d2+12d0*e2) + (4d0*d2-48d0*e2)*lr2 + 16d0*e2*lr2**2)*exp(-lr2) &
+                   + 0.5d0*mu*R*R*XX(lx,kx)
         Pot(lx,kx) = alpha*potvalue
         CB%V(lx,kx) = alpha*potvalue
         !                    write(6,*) 'THIS IS A TEST', kx, lx, Pot(lx,kx)
