@@ -1721,28 +1721,7 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
 
 END SUBROUTINE GridMaker
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-double precision function AsymptoticU(mu,n,R)
-  implicit none
-  integer n
-  double precision R, mu
-  !c  The asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
-  AsymptoticU = dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
-end function AsymptoticU
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-double precision function AsymptoticQtil(mu,m,n,R)
-  implicit none
-  integer m,n
-  double precision R, Q, mu
-  double precision, external :: kdelta
-  
-  !c     The asymptotic form of Qtilde
-  Q = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1))) &
-       -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3))) &
-       -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
-  
-  AsymptoticQtil = Q*0.25d0/(2d0*mu*R**2)
-    
-end function AsymptoticQtil
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This is the asymptotic form of the potential and the Q-matrix for states that go collision channels (exculded are molecular ion channels)
 double precision function AsymptoticVQ(mu,m,n,R)
@@ -1766,36 +1745,15 @@ double precision function AsymptoticVQ(mu,m,n,R)
   
 end function AsymptoticVQ
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-double precision function AsymptoticP(m,n,R)
-  implicit none
-  
-  integer m,n
-  double precision R
-  double precision, external :: kdelta
-  if(m.ne.n) then
-     ! CORRECTED 2026-09-02: the m=n-2 term read sqrt(n*n-1) = sqrt((n-1)(n+1)), which makes P
-     ! NOT antisymmetric -- but P_mn + P_nm = d/dR <Phi_m|Phi_n> = 0 is a theorem for real
-     ! orthonormal channel functions. Measured violation before the fix: P(0,2)+P(2,0) = +0.1589,
-     ! growing to +0.2237 by n=7. With Phi_n = (sqrt(mu) R)^(1/2) Ups_n(u), u = sqrt(mu) R phi,
-     ! P_mn = (1/R)[(1/2)delta_mn + <m|u d/du|n>] and u d/du = (a^2 - adag^2 - 1)/2, giving
-     !     P_mn = (1/2R)[ sqrt(n(n-1)) delta_{m,n-2} - sqrt((n+1)(n+2)) delta_{m,n+2} ].
-     ! Only the m=n-2 term was wrong. Same fix applied in the port,
-     ! ~/Developer/VeffAtomIon1D/AtomIonAsymptotics.f90.
-     AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
-     AsymptoticP = AsymptoticP/R
-  else
-     AsymptoticP = 0d0
-  endif
-  
-end function AsymptoticP
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 subroutine TestAsymptotics(mu,fileVQ,fileP,NC)
+  use AtomIonAsymptotics        ! canonical: ~/Developer/lib/AtomIonAsymptotics.f90
   implicit none
   integer m, n, NR, iR, NC
   double precision R1,R2,mu
   double precision, allocatable :: R(:)
   CHARACTER*64 fileVQ,fileP
-  double precision, external :: AsymptoticP, AsymptoticVQ, AsymptoticU, AsymptoticQtil
+  double precision, external :: AsymptoticVQ
 
   OPEN(unit=900,file=fileVQ(1:INDEX(fileVQ,' ')-1))
   OPEN(unit=901,file=fileP(1:INDEX(fileP,' ')-1))

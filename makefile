@@ -1,17 +1,21 @@
 CMP     = gfortran
+LIB_DIR = $(HOME)/Developer/lib
 CMPFLAGS = -ffixed-line-length-132 -O3
 DEBUG   = -fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-8
 ARPACK =  -L/opt/homebrew/lib/ -larpack
 INCLUDE =  -I/opt/homebrew/include
 LAPACK =  -framework Accelerate
-OBJS  = besselnew.o Bsplines.o Quadrature.o AtomIon1D.o
+OBJS  = besselnew.o Bsplines.o Quadrature.o AtomIonAsymptotics.o AtomIon1D.o
 #matrix_stuff.o
 
 AtomIon1D.x:	   ${OBJS}
 	${CMP} ${DEBUG} ${OBJS} ${INCLUDE} ${ARPACK} ${LAPACK}  ${CMPFLAGS} ${FORCEDP} -o AtomIon1D.x
 
-AtomIon1D.o: AtomIon1D.f90
+AtomIonAsymptotics.o: $(LIB_DIR)/AtomIonAsymptotics.f90
+	${CMP} ${DEBUG} ${FORCEDP} -c $(LIB_DIR)/AtomIonAsymptotics.f90
+
+AtomIon1D.o: AtomIon1D.f90 AtomIonAsymptotics.o
 	${CMP} ${DEBUG} ${FORCEDP} ${CMPFLAGS} -c AtomIon1D.f90
 
 Bsplines.o:	Bsplines.f
