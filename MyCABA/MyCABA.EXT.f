@@ -3593,7 +3593,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
          ! P_mn = (1/R)[(1/2)delta_mn + <m|u d/du|n>] and u d/du = (a^2 - adag^2 - 1)/2, giving
          ! P_mn = (1/2R)[ sqrt(n(n-1)) delta_{m,n-2} - sqrt((n+1)(n+2)) delta_{m,n+2} ].
          ! Only the m=n-2 term was wrong. Same fix applied in the port,
-         ! ~/Documents/GitHub/VeffAtomIon1D/AtomIonAsymptotics.f90.
+         ! ~/Developer/VeffAtomIon1D/AtomIonAsymptotics.f90.
          AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
          AsymptoticP = AsymptoticP/R
       else
