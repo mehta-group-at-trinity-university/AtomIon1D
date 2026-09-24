@@ -1745,7 +1745,7 @@ subroutine TestAsymptotics(mu,fileVQ,fileP,NC)
   call GridMaker(R,NR,R1,R2,"linear")
   do iR=1,NR
      write(fileP,*) R(iR), ((AsymptoticP(m,n,R(iR)), n=m,NC), m=1,NC)
-     write(fileP,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR)), n=m,NC), m=1,NC)
+     write(fileP,*) R(iR), ((AsymptoticVQ(mu,m,n,R(iR),0.5d0,2d0), n=m,NC), m=1,NC)
   enddo
   
 
