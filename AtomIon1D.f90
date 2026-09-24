@@ -1790,7 +1790,15 @@ double precision function AsymptoticP(m,n,R)
   double precision R
   double precision, external :: kdelta
   if(m.ne.n) then
-     AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*n-1)) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
+     ! CORRECTED 2026-09-02: the m=n-2 term read sqrt(n*n-1) = sqrt((n-1)(n+1)), which makes P
+     ! NOT antisymmetric -- but P_mn + P_nm = d/dR <Phi_m|Phi_n> = 0 is a theorem for real
+     ! orthonormal channel functions. Measured violation before the fix: P(0,2)+P(2,0) = +0.1589,
+     ! growing to +0.2237 by n=7. With Phi_n = (sqrt(mu) R)^(1/2) Ups_n(u), u = sqrt(mu) R phi,
+     ! P_mn = (1/R)[(1/2)delta_mn + <m|u d/du|n>] and u d/du = (a^2 - adag^2 - 1)/2, giving
+     !     P_mn = (1/2R)[ sqrt(n(n-1)) delta_{m,n-2} - sqrt((n+1)(n+2)) delta_{m,n+2} ].
+     ! Only the m=n-2 term was wrong. Same fix applied in the port,
+     ! ~/Documents/GitHub/VeffAtomIon1D/AtomIonAsymptotics.f90.
+     AsymptoticP = kdelta(m,n-2)*0.5d0*sqrt(dble(n*(n-1))) - kdelta(m,n+2)*0.5d0*sqrt(dble(n+1)*(n+2))
      AsymptoticP = AsymptoticP/R
   else
      AsymptoticP = 0d0
