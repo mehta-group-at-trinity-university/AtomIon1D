@@ -1724,26 +1724,6 @@ END SUBROUTINE GridMaker
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! This is the asymptotic form of the potential and the Q-matrix for states that go collision channels (exculded are molecular ion channels)
-double precision function AsymptoticVQ(mu,m,n,R)
-  implicit none
-  integer m,n
-  double precision R, VQ, U, mu
-  double precision, external :: kdelta
-  
-  !c     The asymptotic form of Qtilde
-  VQ = kdelta(m,n)*dble(2 + n**2 + n*(3 + iabs(n-1))) &
-       -kdelta(m,n-4)*sqrt(dble(n*(n-1)*(n-2)*(n-3))) &
-       -kdelta(m,n+4)*sqrt(dble((n+1)*(n+2)*(n+3)*(n+4)))
-  
-  VQ = VQ*0.25d0/(2d0*mu*R**2)
-  
-  !c     Add the asymptotic form of Un(R) and the -1/4/(2 mu R^2) from removal of 1st deriv terms
-  if(m.eq.n) then
-     VQ = VQ + dble(n) + 0.5d0 - dble(1 + 2*n*(n+1))*0.25d0/(2d0*mu*R*R) - 0.25d0/(2d0*mu*R*R) 
-  endif
-  AsymptoticVQ = VQ
-  
-end function AsymptoticVQ
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 subroutine TestAsymptotics(mu,fileVQ,fileP,NC)
@@ -1753,7 +1733,6 @@ subroutine TestAsymptotics(mu,fileVQ,fileP,NC)
   double precision R1,R2,mu
   double precision, allocatable :: R(:)
   CHARACTER*64 fileVQ,fileP
-  double precision, external :: AsymptoticVQ
 
   OPEN(unit=900,file=fileVQ(1:INDEX(fileVQ,' ')-1))
   OPEN(unit=901,file=fileP(1:INDEX(fileP,' ')-1))
